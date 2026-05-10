@@ -118,6 +118,12 @@ export const CPT_CATEGORIES = {
   },
 } as const;
 
+// ─── Flat CPT code map (used by NewAuthorization) ──────────────────────────
+
+export const THERAPY_CPT_CODES: Record<string, string> = Object.values(
+  CPT_CATEGORIES
+).reduce<Record<string, string>>((acc, cat) => ({ ...acc, ...cat.codes }), {});
+
 // ─── Common ICD-10 Codes for Therapy ────────────────────────────────────────
 
 export const COMMON_ICD10_CODES: Record<string, string> = {
@@ -201,3 +207,7 @@ export const PA_STATUS_CONFIG: Record<
     description: "Denial under appeal",
   },
 };
+
+// ─── Alias for diagnosis codes ──────────────────────────────────────────────
+
+export const COMMON_THERAPY_DIAGNOSES = COMMON_ICD10_CODES;
