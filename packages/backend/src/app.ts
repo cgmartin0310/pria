@@ -55,7 +55,7 @@ export async function buildApp() {
 
   // ─── Global Error Handler ─────────────────────────────────────────────────
 
-  app.setErrorHandler(async (error, req, reply) => {
+  app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }, req, reply) => {
     app.log.error(error);
     const statusCode = error.statusCode ?? 500;
     return reply.status(statusCode).send({

@@ -7,7 +7,7 @@ services:
     region: ohio
     buildCommand: |
       npm install -g pnpm &&
-      pnpm install --frozen-lockfile &&
+      NODE_ENV=development pnpm install --frozen-lockfile &&
       pnpm --filter @pria/shared build &&
       pnpm --filter @pria/backend build
     startCommand: node packages/backend/dist/index.js
