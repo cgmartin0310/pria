@@ -38,7 +38,6 @@ services:
     name: pria-app
     runtime: static
     plan: free
-    region: ohio
     buildCommand: |
       corepack enable &&
       pnpm install --frozen-lockfile &&
