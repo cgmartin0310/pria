@@ -6,7 +6,7 @@ services:
     plan: starter
     region: ohio
     buildCommand: |
-      corepack enable &&
+      npm install -g pnpm &&
       pnpm install --frozen-lockfile &&
       pnpm --filter @pria/shared build &&
       pnpm --filter @pria/backend build
@@ -38,7 +38,7 @@ services:
     name: pria-app
     runtime: static
     buildCommand: |
-      corepack enable &&
+      npm install -g pnpm &&
       pnpm install --frozen-lockfile &&
       pnpm --filter @pria/shared build &&
       pnpm --filter @pria/frontend build
