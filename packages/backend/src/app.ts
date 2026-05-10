@@ -29,14 +29,15 @@ export async function buildApp() {
 
   // ─── Health Check ─────────────────────────────────────────────────────────
 
-  app.get("/health", async () => {
-    return {
-      status: "ok",
-      service: "pria-api",
-      version: "0.1.0",
-      timestamp: new Date().toISOString(),
-    };
+  const healthResponse = async () => ({
+    status: "ok",
+    service: "pria-api",
+    version: "0.1.0",
+    timestamp: new Date().toISOString(),
   });
+
+  app.get("/health", healthResponse);
+  app.get("/api/health", healthResponse);
 
   // ─── Routes ───────────────────────────────────────────────────────────────
 

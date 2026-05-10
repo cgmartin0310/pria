@@ -5,11 +5,15 @@ import { closeQueues } from "./jobs/queue.js";
 async function main() {
   const app = await buildApp();
 
-  // Start workers (import registers them)
-  if (config.server.nodeEnv !== "test") {
-    await import("./jobs/pa-submit.job.js");
-    await import("./jobs/pa-status.job.js");
-    console.log("[workers] PA submit and status workers started");
+  // Start workers (import registers them) — gracefully skip if Redis unavailable
+  if (config.server.nodeEnv !== "test" && config.redis.url) {
+    try {
+      await import("./jobs/pa-submit.job.js");
+      await import("./jobs/pa-status.job.js");
+      console.log("[workers] PA submit and status workers started");
+    } catch (err) {
+      console.warn("[workers] Failed to start workers (Redis may be unavailable):", err);
+    }
   }
 
   try {
