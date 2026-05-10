@@ -50,6 +50,7 @@ export const practices = pgTable("practices", {
     .primaryKey()
     .$defaultFn(() => createId()),
   name: varchar("name", { length: 255 }).notNull(),
+  /** Group NPI (Type 2) — maps to 2000B NM109 */
   npi: varchar("npi", { length: 10 }).notNull(),
   address: jsonb("address").notNull().$type<{
     street: string;
@@ -58,7 +59,37 @@ export const practices = pgTable("practices", {
     zip: string;
   }>(),
   phone: varchar("phone", { length: 20 }).notNull(),
+  /** PER contact fax — used in 278 2000B PER segment */
+  fax: varchar("fax", { length: 20 }),
+  /** PER contact email */
+  email: varchar("email", { length: 255 }),
   plan: planTierEnum("plan").notNull().default("solo"),
+  /**
+   * Clinic-level EDI / 278 configuration. Configured ONCE during clinic setup.
+   * NOT collected per-patient or per-authorization.
+   */
+  clinicConfig: jsonb("clinic_config").$type<{
+    /** PRV03 — taxonomy codes for the practice (e.g. ['225100000X'] for PT) */
+    taxonomyCodes: string[];
+    /** UM04-1 — facility type code ('11'=Office, '22'=Outpatient Hospital) */
+    facilityTypeCode: string;
+    /** UM04-2 — claim type: 'B'=Professional, 'A'=Institutional */
+    claimType: "B" | "A";
+    /** ISA05 — interchange sender qualifier (typically 'ZZ') */
+    ediSenderQualifier: string;
+    /** ISA06 — interchange sender ID assigned by clearinghouse */
+    ediSenderId: string;
+    /** ISA07 — interchange receiver qualifier (typically 'ZZ') */
+    ediReceiverQualifier: string;
+    /** ISA08 — interchange receiver ID (clearinghouse ID) */
+    ediReceiverId: string;
+    /** GS02 — application sender ID (often same as ediSenderId) */
+    gsApplicationSenderId?: string;
+    /** GS03 — application receiver ID */
+    gsApplicationReceiverId?: string;
+    /** UM01 default — request category code ('HS' for outpatient PT/OT/ST) */
+    requestCategoryCode?: string;
+  }>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -96,7 +127,15 @@ export const payers = pgTable(
       .primaryKey()
       .$defaultFn(() => createId()),
     name: varchar("name", { length: 255 }).notNull(),
-    payerId: varchar("payer_id", { length: 50 }).notNull(), // EDI ID
+    /** EDI Payer ID — maps to 2000A NM109 in the 278 transaction */
+    payerId: varchar("payer_id", { length: 50 }).notNull(),
+    /**
+     * NM108 qualifier for the payer ID.
+     * 'PI' = Payer ID (most commercial payers), '46' = ETIN.
+     */
+    payerIdQualifier: varchar("payer_id_qualifier", { length: 5 })
+      .notNull()
+      .default("PI"),
     portalUrl: text("portal_url"),
     rulesConfig: jsonb("rules_config")
       .notNull()
@@ -114,6 +153,12 @@ export const payers = pgTable(
       }),
     supportsX278: boolean("supports_x278").notNull().default(false),
     supportsFhir: boolean("supports_fhir").notNull().default(false),
+    /** Optional clearinghouse routing info for this payer */
+    clearinghouseRouting: jsonb("clearinghouse_routing").$type<{
+      clearinghouseId: string;
+      clearinghouseName: string;
+      notes?: string;
+    }>(),
   },
   (t) => [uniqueIndex("payers_payer_id_idx").on(t.payerId)]
 );
@@ -130,14 +175,69 @@ export const patients = pgTable(
       .notNull()
       .references(() => practices.id, { onDelete: "cascade" }),
     payerId: varchar("payer_id", { length: 26 }).references(() => payers.id),
-    firstName: varchar("first_name", { length: 100 }).notNull(),
-    lastName: varchar("last_name", { length: 100 }).notNull(),
-    dob: varchar("dob", { length: 10 }).notNull(), // YYYY-MM-DD
+
+    // ─ Core demographics ─
+    firstName: varchar("first_name", { length: 100 }).notNull(),   // 2000C/D NM104
+    lastName: varchar("last_name", { length: 100 }).notNull(),     // 2000C/D NM103
+    /** NM105 — patient middle name */
+    middleName: varchar("middle_name", { length: 100 }),
+    dob: varchar("dob", { length: 10 }).notNull(),                 // YYYY-MM-DD → DMG02
+    /** DMG03 — gender code: 'M', 'F', or 'U' */
+    gender: varchar("gender", { length: 1 }),
+    /** N3/N4 — patient address */
+    address: jsonb("address").$type<{
+      street: string;
+      city: string;
+      state: string;
+      zip: string;
+    }>(),
+    phone: varchar("phone", { length: 20 }),
+
+    // ─ Insurance ─
+    /**
+     * Insurance Member ID (from insurance card).
+     * Maps to 2000C NM109 (qualifier MI).
+     * MOST CRITICAL field for 278 generation.
+     */
     memberId: varchar("member_id", { length: 100 }).notNull(),
+    /**
+     * Relationship to subscriber. '18'=Self, '01'=Spouse, '19'=Child.
+     * Maps to INS segment in 2000C/2000D loops.
+     * Default '18' (self) means patient IS the subscriber.
+     */
+    relationshipToSubscriber: varchar("relationship_to_subscriber", { length: 5 })
+      .notNull()
+      .default("18"),
+    /** Plan/group number — maps to 2000C REF */
+    groupNumber: varchar("group_number", { length: 50 }),
+
+    // ─ Subscriber info (only when patient is a dependent, i.e. relationship ≠ '18') ─
+    /** 2000C NM103 — subscriber last name (when patient is a dependent) */
+    subscriberLastName: varchar("subscriber_last_name", { length: 100 }),
+    /** 2000C NM104 */
+    subscriberFirstName: varchar("subscriber_first_name", { length: 100 }),
+    /** 2000C NM105 */
+    subscriberMiddleName: varchar("subscriber_middle_name", { length: 100 }),
+    /** 2000C NM109 — subscriber/policyholder member ID */
+    subscriberMemberId: varchar("subscriber_member_id", { length: 100 }),
+    /** 2000C DMG02 — subscriber date of birth (YYYY-MM-DD) */
+    subscriberDob: varchar("subscriber_dob", { length: 10 }),
+    /** 2000C DMG03 — subscriber gender */
+    subscriberGender: varchar("subscriber_gender", { length: 1 }),
+    /** 2000C N3/N4 — subscriber address */
+    subscriberAddress: jsonb("subscriber_address").$type<{
+      street: string;
+      city: string;
+      state: string;
+      zip: string;
+    }>(),
+
+    // ─ Clinical ─
     diagnosisCodes: jsonb("diagnosis_codes")
       .notNull()
       .$type<string[]>()
       .default([]),
+
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -149,6 +249,52 @@ export const patients = pgTable(
 );
 
 // ─── Authorizations ───────────────────────────────────────────────────────────
+
+
+// ─── Providers ────────────────────────────────────────────────────────────────
+
+/**
+ * Individual therapist/provider records.
+ * Maps to the 2010EA (Patient Event Provider) loop in the X12 278.
+ * Configured once per therapist — NOT collected per authorization.
+ */
+export const providers = pgTable(
+  "providers",
+  {
+    id: varchar("id", { length: 26 })
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    practiceId: varchar("practice_id", { length: 26 })
+      .notNull()
+      .references(() => practices.id, { onDelete: "cascade" }),
+    /** Optional link to a User record if the provider has portal access */
+    userId: varchar("user_id", { length: 26 }).references(() => users.id),
+    /** Individual (Type 1) NPI — maps to 2010EA NM109 */
+    npi: varchar("npi", { length: 10 }).notNull(),
+    /** NM103 */
+    lastName: varchar("last_name", { length: 100 }).notNull(),
+    /** NM104 */
+    firstName: varchar("first_name", { length: 100 }).notNull(),
+    /** NM107 (suffix/credentials e.g. 'DPT', 'OTR/L', 'CCC-SLP') */
+    suffix: varchar("suffix", { length: 50 }),
+    /** Display credentials (for UI; not transmitted in 278) */
+    credentials: varchar("credentials", { length: 100 }),
+    /** PRV03 — taxonomy code (e.g. '225100000X' for PT) */
+    taxonomyCode: varchar("taxonomy_code", { length: 20 }).notNull(),
+    /** REF*0B — state license number (some payers require for therapy) */
+    stateLicenseNumber: varchar("state_license_number", { length: 50 }),
+    /** Discipline: 'PT' | 'OT' | 'ST' — drives auto-population of service codes/modifiers */
+    discipline: varchar("discipline", { length: 5 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("providers_practice_id_idx").on(t.practiceId),
+    index("providers_user_id_idx").on(t.userId),
+    uniqueIndex("providers_npi_idx").on(t.npi),
+  ]
+);
 
 export const authorizations = pgTable(
   "authorizations",
@@ -165,16 +311,80 @@ export const authorizations = pgTable(
     payerId: varchar("payer_id", { length: 26 })
       .notNull()
       .references(() => payers.id),
+    /** Rendering/treating provider — maps to 2010EA NM1 */
+    providerId: varchar("provider_id", { length: 26 }).references(() => providers.id),
+
     status: paStatusEnum("status").notNull().default("draft"),
+    /** Authorization number from payer response — HCR02 */
     authNumber: varchar("auth_number", { length: 100 }),
+
+    // 278 UM Segment Fields
+    /** UM02: 'I'=Initial, 'R'=Renewal, 'S'=Revised, 'A'=Admission */
+    certificationTypeCode: varchar("certification_type_code", { length: 2 }),
+    /** UM03: 'AD'=OT, 'AE'=PT, 'AF'=Speech. Auto-populated from provider discipline. */
+    serviceTypeCode: varchar("service_type_code", { length: 5 }),
+    /** UM06: 'E'=Emergency, 'U'=Urgent, 'R'=Routine */
+    levelOfServiceCode: varchar("level_of_service_code", { length: 2 }),
+    /** UM04-1: '11'=Office, '22'=Outpatient Hospital. Defaults to clinic config. */
+    placeOfServiceCode: varchar("place_of_service_code", { length: 5 }),
+    /** UM01: 'HS'=Health Services Review (standard for outpatient PT/OT/ST) */
+    requestCategoryCode: varchar("request_category_code", { length: 5 }),
+
+    // Codes (flat lists for legacy/display; serviceLines preferred for 278 generation)
     cptCodes: jsonb("cpt_codes").notNull().$type<string[]>().default([]),
     icdCodes: jsonb("icd_codes").notNull().$type<string[]>().default([]),
+
+    // Visit Pattern (HSD Segment)
+    /** Structured visit frequency/duration. Maps to HSD segment in 2000E loop. */
+    visitPattern: jsonb("visit_pattern").$type<{
+      visitsPerPeriod: number;           // HSD02
+      periodFrequency: "DA" | "WK" | "MO"; // HSD03
+      periodCount: number;               // HSD04
+      totalDurationDays?: number;        // HSD06
+    }>(),
+    /** Legacy: total visits requested (used when visitPattern is not set) */
     requestedVisits: integer("requested_visits").notNull().default(12),
     approvedVisits: integer("approved_visits"),
-    startDate: varchar("start_date", { length: 10 }), // YYYY-MM-DD
-    endDate: varchar("end_date", { length: 10 }), // YYYY-MM-DD
+
+    // Service Lines (2000F Loop)
+    /** Individual CPT service lines with modifiers. Maps to 2000F SV1 segments. */
+    serviceLines: jsonb("service_lines").$type<Array<{
+      cptCode: string;          // SV101-2
+      modifiers?: string[];     // SV101-3/4 (GP, GO, GN, KX, 59)
+      units?: number;           // SV105
+      unitType?: "UN" | "VS";   // HSD01 qualifier
+      description?: string;
+    }>>(),
+
+    // Dates
+    startDate: varchar("start_date", { length: 10 }),    // YYYY-MM-DD: DTP service start
+    endDate: varchar("end_date", { length: 10 }),        // YYYY-MM-DD: DTP service end
+    /** Onset/injury date (YYYY-MM-DD). Maps to DTP in 2000E loop. */
+    onsetDate: varchar("onset_date", { length: 10 }),
+
+    // References
+    /** Previous auth number for renewals. Maps to REF in 2000E loop. */
+    previousAuthNumber: varchar("previous_auth_number", { length: 100 }),
+    /** Internal tracking ID. Maps to BHT03 and TRN segment. */
+    internalTrackingNumber: varchar("internal_tracking_number", { length: 100 }),
+
+    // Clinical
     visitsUsed: integer("visits_used").notNull().default(0),
     clinicalSummary: text("clinical_summary"),
+    /** Free-text clinical message to UMO. Maps to MSG segment in 2000E. */
+    clinicalNotes: text("clinical_notes"),
+    /** UM05: 'AA'=Auto Accident, 'OA'=Other Accident. Null if not accident-related. */
+    accidentIndicator: varchar("accident_indicator", { length: 3 }),
+
+    // Response fields (populated from 278-11 response)
+    /** HCR01: 'A1'=Certified, 'A2'=Modified, 'A3'=Denied, 'A4'=Pended */
+    decisionCode: varchar("decision_code", { length: 5 }),
+    decisionMessage: text("decision_message"),
+    /** HCR03 start: certification period start date from response (YYYY-MM-DD) */
+    certificationPeriodStart: varchar("certification_period_start", { length: 10 }),
+    /** HCR03 end: certification period end date from response (YYYY-MM-DD) */
+    certificationPeriodEnd: varchar("certification_period_end", { length: 10 }),
+
     submittedAt: timestamp("submitted_at"),
     decidedAt: timestamp("decided_at"),
     expiresAt: timestamp("expires_at"),
@@ -185,6 +395,7 @@ export const authorizations = pgTable(
     index("auths_practice_id_idx").on(t.practiceId),
     index("auths_patient_id_idx").on(t.patientId),
     index("auths_payer_id_idx").on(t.payerId),
+    index("auths_provider_id_idx").on(t.providerId),
     index("auths_status_idx").on(t.status),
     index("auths_expires_at_idx").on(t.expiresAt),
   ]
@@ -275,6 +486,7 @@ export const payerRules = pgTable(
 export const practiceRelations = relations(practices, ({ many }) => ({
   users: many(users),
   patients: many(patients),
+  providers: many(providers),
   authorizations: many(authorizations),
 }));
 
@@ -303,6 +515,18 @@ export const patientRelations = relations(patients, ({ one, many }) => ({
   authorizations: many(authorizations),
 }));
 
+export const providerRelations = relations(providers, ({ one, many }) => ({
+  practice: one(practices, {
+    fields: [providers.practiceId],
+    references: [practices.id],
+  }),
+  user: one(users, {
+    fields: [providers.userId],
+    references: [users.id],
+  }),
+  authorizations: many(authorizations),
+}));
+
 export const authorizationRelations = relations(
   authorizations,
   ({ one, many }) => ({
@@ -317,6 +541,10 @@ export const authorizationRelations = relations(
     payer: one(payers, {
       fields: [authorizations.payerId],
       references: [payers.id],
+    }),
+    provider: one(providers, {
+      fields: [authorizations.providerId],
+      references: [providers.id],
     }),
     documents: many(authorizationDocuments),
     history: many(authorizationHistory),
