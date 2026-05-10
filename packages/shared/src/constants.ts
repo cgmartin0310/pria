@@ -145,7 +145,7 @@ export const COMMON_ICD10_CODES: Record<string, string> = {
   // Post-surgical
   "Z96.641": "Presence of right artificial knee joint",
   "Z96.642": "Presence of left artificial knee joint",
-  "Z96.641": "Presence of right artificial hip joint",
+  "Z96.651": "Presence of right artificial hip joint",
   // Balance/Falls
   "R42": "Dizziness and giddiness",
   "R26.89": "Other abnormalities of gait and mobility",
