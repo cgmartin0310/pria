@@ -58,6 +58,8 @@ import type {
   AuthorizationWithRelations,
   Patient,
   Payer,
+  Provider,
+  Practice,
   DashboardStats,
   ApiResponse,
   ApiListResponse,
@@ -98,4 +100,23 @@ export const patientsApi = {
 export const payersApi = {
   list: () => api.get<ApiResponse<Payer[]>>("/payers"),
   get: (id: string) => api.get<ApiResponse<Payer>>(`/payers/${id}`),
+};
+
+export const providersApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+    return api.get<ApiListResponse<Provider>>(`/providers${qs}`);
+  },
+  get: (id: string) => api.get<ApiResponse<Provider>>(`/providers/${id}`),
+  create: (data: unknown) => api.post<ApiResponse<Provider>>("/providers", data),
+  update: (id: string, data: unknown) =>
+    api.patch<ApiResponse<Provider>>(`/providers/${id}`, data),
+};
+
+export const practiceApi = {
+  getCurrent: () => api.get<ApiResponse<Practice>>("/practices/current"),
+  updateCurrent: (data: unknown) =>
+    api.patch<ApiResponse<Practice>>("/practices/current", data),
+  updateClinicConfig: (data: unknown) =>
+    api.patch<ApiResponse<Practice>>("/practices/current/clinic-config", data),
 };

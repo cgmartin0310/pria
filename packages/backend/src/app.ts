@@ -6,6 +6,8 @@ import { authRoutes } from "./routes/auth.js";
 import { authorizationRoutes } from "./routes/authorizations.js";
 import { patientRoutes } from "./routes/patients.js";
 import { payerRoutes } from "./routes/payers.js";
+import { providerRoutes } from "./routes/providers.js";
+import { practiceRoutes } from "./routes/practices.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -49,6 +51,8 @@ export async function buildApp() {
       await api.register(authorizationRoutes);
       await api.register(patientRoutes);
       await api.register(payerRoutes);
+      await api.register(providerRoutes);
+      await api.register(practiceRoutes);
     },
     { prefix: API_PREFIX }
   );
