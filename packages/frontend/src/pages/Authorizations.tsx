@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { Plus, Search, Filter, FileText } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
+import { Plus, Search, FileText } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Badge } from "@/components/ui/badge.js";
 import { Input } from "@/components/ui/input.js";
-import { Select } from "@/components/ui/select.js";
 import {
   Table,
   TableBody,
@@ -16,7 +15,7 @@ import {
 } from "@/components/ui/table.js";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs.js";
 import { formatDate } from "@/lib/utils.js";
-import { PA_STATUSES, type PAStatus } from "@pria/shared";
+import type { PAStatus } from "@pria/shared";
 
 // ─── Mock Data ─────────────────────────────────────────────────────────────────
 

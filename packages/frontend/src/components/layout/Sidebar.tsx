@@ -4,6 +4,7 @@ import {
   FileText,
   PlusCircle,
   Users,
+  Stethoscope,
   Building2,
   Settings,
   Zap,
@@ -19,9 +20,10 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
+  { label: "Patients", to: "/patients", icon: Users },
+  { label: "Providers", to: "/providers", icon: Stethoscope },
   { label: "Authorizations", to: "/authorizations", icon: FileText },
   { label: "New Authorization", to: "/authorizations/new", icon: PlusCircle },
-  { label: "Patients", to: "/patients", icon: Users },
   { label: "Settings", to: "/settings", icon: Settings },
 ];
 

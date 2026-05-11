@@ -4,7 +4,6 @@ import { ArrowLeft, X } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
-import { Badge } from "@/components/ui/badge.js";
 import { RELATIONSHIP_CODES, COMMON_ICD10_CODES, US_STATES } from "@pria/shared";
 import { patientsApi, payersApi } from "@/lib/api.js";
 import type { Payer } from "@pria/shared";

@@ -6,7 +6,7 @@ import {
   TrendingUp,
   Calendar,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.js";
+import { Card, CardContent } from "@/components/ui/card.js";
 import type { DashboardStats } from "@pria/shared";
 
 const MOCK_STATS: DashboardStats = {

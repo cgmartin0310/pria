@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { ArrowRight, Clock, AlertTriangle } from "lucide-react";
 import { DashboardOverview } from "@/components/dashboard/DashboardOverview.js";
@@ -10,87 +11,61 @@ import {
 import { Badge } from "@/components/ui/badge.js";
 import { Button } from "@/components/ui/button.js";
 import { formatDate } from "@/lib/utils.js";
-import type { PAStatus } from "@pria/shared";
+import { authorizationsApi } from "@/lib/api.js";
+import type { PAStatus, DashboardStats, AuthorizationWithRelations } from "@pria/shared";
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
-
-const RECENT_AUTHS = [
-  {
-    id: "auth_001",
-    patient: "Margaret Thompson",
-    payer: "UnitedHealthcare",
-    cptCodes: ["97110", "97140"],
-    status: "pending" as PAStatus,
-    requestedVisits: 24,
-    submittedAt: "2025-05-06",
-  },
-  {
-    id: "auth_002",
-    patient: "Robert Chen",
-    payer: "Aetna",
-    cptCodes: ["97161", "97110"],
-    status: "approved" as PAStatus,
-    requestedVisits: 16,
-    submittedAt: "2025-05-04",
-  },
-  {
-    id: "auth_003",
-    patient: "Linda Okafor",
-    payer: "Anthem BCBS",
-    cptCodes: ["92507"],
-    status: "denied" as PAStatus,
-    requestedVisits: 20,
-    submittedAt: "2025-05-03",
-  },
-  {
-    id: "auth_004",
-    patient: "James Rivera",
-    payer: "Cigna",
-    cptCodes: ["97530", "97112"],
-    status: "submitted" as PAStatus,
-    requestedVisits: 12,
-    submittedAt: "2025-05-07",
-  },
-  {
-    id: "auth_005",
-    patient: "Susan Park",
-    payer: "Humana",
-    cptCodes: ["97110", "97012"],
-    status: "approved" as PAStatus,
-    requestedVisits: 18,
-    submittedAt: "2025-05-02",
-  },
-];
-
-const EXPIRING_AUTHS = [
-  {
-    id: "auth_010",
-    patient: "David Williams",
-    payer: "UnitedHealthcare",
-    visitsRemaining: 3,
-    expiresAt: "2025-05-20",
-  },
-  {
-    id: "auth_011",
-    patient: "Maria Santos",
-    payer: "Aetna",
-    visitsRemaining: 5,
-    expiresAt: "2025-05-18",
-  },
-  {
-    id: "auth_012",
-    patient: "Thomas Kim",
-    payer: "Cigna",
-    visitsRemaining: 2,
-    expiresAt: "2025-05-16",
-  },
-];
+const EMPTY_STATS: DashboardStats = {
+  pendingCount: 0,
+  approvedThisMonth: 0,
+  deniedThisMonth: 0,
+  expiringSoon: 0,
+  approvalRate: 0,
+  avgDecisionDays: 0,
+};
 
 export default function Dashboard() {
+  const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
+  const [recentAuths, setRecentAuths] = useState<AuthorizationWithRelations[]>([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [authsLoading, setAuthsLoading] = useState(true);
+  const [setupNeeded, setSetupNeeded] = useState(false);
+
+  useEffect(() => {
+    authorizationsApi
+      .stats()
+      .then((res) => {
+        if (res.data) setStats(res.data);
+      })
+      .catch(() => {
+        setSetupNeeded(true);
+      })
+      .finally(() => setStatsLoading(false));
+
+    authorizationsApi
+      .list({ pageSize: "5" })
+      .then((res) => {
+        if (res.data) setRecentAuths(res.data);
+      })
+      .catch(() => {
+        // show empty state
+      })
+      .finally(() => setAuthsLoading(false));
+  }, []);
+
   return (
     <div className="space-y-6">
+      {setupNeeded && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+          <strong>Welcome to Pria!</strong> To get started,{" "}
+          <Link to="/settings" className="underline font-medium">
+            set up your practice
+          </Link>{" "}
+          and add your first providers and patients.
+        </div>
+      )}
+
       {/* Stats */}
-      <DashboardOverview />
+      <DashboardOverview stats={statsLoading ? EMPTY_STATS : stats} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Recent Authorizations */}
@@ -109,32 +84,49 @@ export default function Dashboard() {
             </Button>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y divide-slate-100">
-              {RECENT_AUTHS.map((auth) => (
-                <div
-                  key={auth.id}
-                  className="flex items-center justify-between px-6 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-900">
-                      {auth.patient}
-                    </p>
-                    <p className="truncate text-xs text-slate-500">
-                      {auth.payer} · {auth.cptCodes.join(", ")}
-                    </p>
+            {authsLoading ? (
+              <div className="py-8 text-center text-sm text-slate-400">
+                Loading...
+              </div>
+            ) : recentAuths.length === 0 ? (
+              <div className="py-8 text-center text-sm text-slate-400">
+                No authorizations yet.{" "}
+                <Link to="/authorizations/new" className="text-blue-600 underline">
+                  Create one
+                </Link>
+                .
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {recentAuths.map((auth) => (
+                  <div
+                    key={auth.id}
+                    className="flex items-center justify-between px-6 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-900">
+                        {auth.patient
+                          ? `${auth.patient.lastName}, ${auth.patient.firstName}`
+                          : auth.patientId}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {auth.payer?.name ?? auth.payerId} ·{" "}
+                        {auth.cptCodes.join(", ")}
+                      </p>
+                    </div>
+                    <div className="ml-4 flex flex-col items-end gap-1">
+                      <Badge variant={auth.status as PAStatus}>
+                        {auth.status.charAt(0).toUpperCase() +
+                          auth.status.slice(1)}
+                      </Badge>
+                      <span className="text-xs text-slate-400">
+                        {formatDate(auth.submittedAt)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="ml-4 flex flex-col items-end gap-1">
-                    <Badge variant={auth.status}>
-                      {auth.status.charAt(0).toUpperCase() +
-                        auth.status.slice(1)}
-                    </Badge>
-                    <span className="text-xs text-slate-400">
-                      {formatDate(auth.submittedAt)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -152,34 +144,23 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y divide-slate-100">
-              {EXPIRING_AUTHS.map((auth) => (
-                <div
-                  key={auth.id}
-                  className="flex items-center justify-between px-6 py-4"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">
-                      {auth.patient}
-                    </p>
-                    <p className="text-xs text-slate-500">{auth.payer}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-orange-600">
-                      {auth.visitsRemaining} visits left
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      Expires {formatDate(auth.expiresAt)}
-                    </p>
-                  </div>
+            <div className="py-8 text-center text-sm text-slate-400">
+              {stats.expiringSoon > 0 ? (
+                <div className="px-6">
+                  <p className="font-medium text-orange-600 text-base">
+                    {stats.expiringSoon} auth{stats.expiringSoon !== 1 ? "s" : ""} expiring soon
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Within 14 days or 5 visits remaining
+                  </p>
                 </div>
-              ))}
+              ) : (
+                "No authorizations expiring soon."
+              )}
             </div>
             <div className="border-t border-slate-100 p-4">
               <Button variant="outline" size="sm" className="w-full" asChild>
-                <Link to="/authorizations/new">
-                  Start Renewal Requests
-                </Link>
+                <Link to="/authorizations/new">Start Renewal Requests</Link>
               </Button>
             </div>
           </CardContent>
@@ -200,12 +181,12 @@ export default function Dashboard() {
               <Link to="/authorizations?status=denied">Review Denials</Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link to="/patients">Add Patient</Link>
+              <Link to="/patients/new">Add Patient</Link>
             </Button>
             <Button variant="secondary" asChild>
               <Link to="/authorizations?status=pending">
                 <Clock className="mr-1 h-4 w-4" />
-                Pending ({6})
+                Pending ({stats.pendingCount})
               </Link>
             </Button>
           </div>

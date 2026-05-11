@@ -11,6 +11,8 @@ export interface ButtonProps
     | "ghost"
     | "link";
   size?: "default" | "sm" | "lg" | "icon";
+  /** Renders the button styles onto the child element instead of a <button> */
+  asChild?: boolean;
 }
 
 const variantClasses: Record<NonNullable<ButtonProps["variant"]>, string> = {
@@ -36,23 +38,33 @@ const sizeClasses: Record<NonNullable<ButtonProps["size"]>, string> = {
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
-    { className, variant = "default", size = "default", ...props },
+    { className, variant = "default", size = "default", asChild = false, children, ...props },
     ref
   ) => {
+    const classes = cn(
+      "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+      "disabled:pointer-events-none disabled:opacity-50",
+      "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+      variantClasses[variant],
+      sizeClasses[size],
+      className
+    );
+
+    if (asChild && React.isValidElement(children)) {
+      return React.cloneElement(children as React.ReactElement<{ className?: string }>, {
+        className: cn(classes, (children as React.ReactElement<{ className?: string }>).props.className),
+      });
+    }
+
     return (
       <button
         ref={ref}
-        className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-          "disabled:pointer-events-none disabled:opacity-50",
-          "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
-          variantClasses[variant],
-          sizeClasses[size],
-          className
-        )}
+        className={classes}
         {...props}
-      />
+      >
+        {children}
+      </button>
     );
   }
 );

@@ -1,75 +1,219 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import { ArrowLeft, Sparkles, Send, Save } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { Badge } from "@/components/ui/badge.js";
-import { THERAPY_CPT_CODES, COMMON_THERAPY_DIAGNOSES } from "@pria/shared";
+import {
+  THERAPY_CPT_CODES,
+  CERTIFICATION_TYPES,
+  LEVEL_OF_SERVICE_CODES,
+  DISCIPLINE_TO_SERVICE_TYPE,
+} from "@pria/shared";
+import { patientsApi, providersApi, authorizationsApi } from "@/lib/api.js";
+import type { Patient, Provider } from "@pria/shared";
 
-// ─── Mock Patients ─────────────────────────────────────────────────────────────
+// PatientWithPayer includes payer object from backend join
+type PatientRow = Patient & { payer?: { id: string; name: string } };
 
-const MOCK_PATIENTS = [
-  { id: "P001", name: "Margaret Thompson", dob: "1958-03-12", memberId: "UHC-884721", payer: "UnitedHealthcare" },
-  { id: "P002", name: "Robert Chen", dob: "1972-07-24", memberId: "AET-331092", payer: "Aetna" },
-  { id: "P003", name: "Linda Okafor", dob: "1965-11-08", memberId: "ANT-772019", payer: "Anthem BCBS" },
-  { id: "P004", name: "James Rivera", dob: "1980-01-30", memberId: "CIG-449201", payer: "Cigna" },
-  { id: "P005", name: "Susan Park", dob: "1948-09-15", memberId: "HUM-201847", payer: "Humana" },
-];
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function NativeSelect({
+  value,
+  onChange,
+  children,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </select>
+  );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function NewAuthorization() {
   const navigate = useNavigate();
-  const [selectedPatient, setSelectedPatient] = useState<string>("");
+
+  // Data
+  const [patients, setPatients] = useState<PatientRow[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  // Form state
+  const [selectedPatientId, setSelectedPatientId] = useState("");
+  const [selectedProviderId, setSelectedProviderId] = useState("");
+  const [certificationTypeCode, setCertificationTypeCode] = useState("I");
+  const [levelOfServiceCode, setLevelOfServiceCode] = useState("R");
   const [selectedCpts, setSelectedCpts] = useState<string[]>([]);
+  const [icdCodes] = useState<string[]>([]);
   const [requestedVisits, setRequestedVisits] = useState("12");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  // Visit pattern
+  const [visitsPerPeriod, setVisitsPerPeriod] = useState("2");
+  const [periodFrequency, setPeriodFrequency] = useState<"WK" | "MO" | "DA">("WK");
+  const [periodCount, setPeriodCount] = useState("6");
+  // Clinical
   const [clinicalNotes, setClinicalNotes] = useState("");
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  // Submission
+  const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  const patient = MOCK_PATIENTS.find((p) => p.id === selectedPatient);
+  useEffect(() => {
+    Promise.all([patientsApi.list(), providersApi.list()])
+      .then(([pRes, provRes]) => {
+        if (pRes.data) setPatients(pRes.data as PatientRow[]);
+        if (provRes.data) setProviders(provRes.data);
+      })
+      .catch(() => {
+        // proceed with empty lists
+      })
+      .finally(() => setLoadingData(false));
+  }, []);
 
-  const toggleCpt = (code: string) => {
+  const patient = patients.find((p) => p.id === selectedPatientId);
+  const provider = providers.find((p) => p.id === selectedProviderId);
+
+  // Auto-derive service type from provider discipline
+  const serviceTypeCode = provider
+    ? DISCIPLINE_TO_SERVICE_TYPE[provider.discipline]
+    : undefined;
+
+  const toggleCpt = (code: string) =>
     setSelectedCpts((prev) =>
       prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
     );
-  };
 
   const handleAiGenerate = () => {
     setGenerating(true);
-    // Simulate AI generation
     setTimeout(() => {
+      const patientName = patient
+        ? `${patient.firstName} ${patient.lastName}`
+        : "the patient";
+      const icdList =
+        patient?.diagnosisCodes?.length
+          ? patient.diagnosisCodes.join(", ")
+          : "M54.5";
       setAiSummary(
-        `Patient presents with reduced functional mobility and chronic low back pain (M54.5). ` +
-        `Initial evaluation reveals significant limitations in ADLs including difficulty with sit-to-stand transfers, ` +
-        `ambulation >200ft, and stair navigation. Pain rated 7/10 on VAS. ` +
-        `Lumbar ROM restricted to 40% flexion, 30% extension. ` +
-        `Treatment plan includes therapeutic exercises (97110) and manual therapy (97140) ` +
-        `targeting core stabilization, flexibility restoration, and functional mobility training. ` +
-        `${requestedVisits} visits over 8 weeks recommended to achieve functional goals. ` +
-        `Patient demonstrates good rehabilitation potential based on motivation and prior functional level.`
+        `Patient ${patientName} presents with functional limitations requiring skilled therapy intervention. ` +
+          `Diagnoses: ${icdList}. Initial evaluation reveals significant limitations in ADLs and functional mobility. ` +
+          `Pain rated 7/10 on VAS. ROM restricted, limiting participation in daily activities. ` +
+          `Treatment plan includes ${selectedCpts.map((c) => `${c} (${THERAPY_CPT_CODES[c] ?? c})`).join(", ")}. ` +
+          `${requestedVisits} visits over ${periodCount} ${periodFrequency === "WK" ? "weeks" : periodFrequency === "MO" ? "months" : "days"} recommended. ` +
+          `Patient demonstrates good rehabilitation potential based on motivation and prior functional level.`
       );
       setGenerating(false);
-    }, 2000);
+    }, 1500);
   };
+
+  const buildPayload = (status: "draft" | "pending") => ({
+    patientId: selectedPatientId,
+    payerId: patient?.payerId ?? patient?.payer?.id,
+    providerId: selectedProviderId || undefined,
+    certificationTypeCode,
+    serviceTypeCode,
+    levelOfServiceCode,
+    cptCodes: selectedCpts,
+    icdCodes: patient?.diagnosisCodes ?? icdCodes,
+    requestedVisits: parseInt(requestedVisits, 10),
+    startDate: startDate || null,
+    endDate: endDate || null,
+    visitPattern:
+      visitsPerPeriod && periodCount
+        ? {
+            visitsPerPeriod: parseInt(visitsPerPeriod, 10),
+            periodFrequency,
+            periodCount: parseInt(periodCount, 10),
+          }
+        : undefined,
+    clinicalNotes: clinicalNotes || aiSummary || undefined,
+    status,
+  });
+
+  const handleSubmit = async () => {
+    if (!selectedPatientId || selectedCpts.length === 0) return;
+    setSubmitting(true);
+    setApiError(null);
+    try {
+      await authorizationsApi.create(buildPayload("pending"));
+      navigate("/authorizations");
+    } catch {
+      setApiError("Submission failed. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!selectedPatientId) return;
+    setSavingDraft(true);
+    setApiError(null);
+    try {
+      await authorizationsApi.create(buildPayload("draft"));
+      navigate("/authorizations");
+    } catch {
+      setApiError("Failed to save draft. Please try again.");
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const canSubmit =
+    !loadingData && selectedPatientId && selectedCpts.length > 0 && aiSummary;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/authorizations">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Back
-          </Link>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/authorizations")}>
+          <ArrowLeft className="mr-1 h-4 w-4" />
+          Back
         </Button>
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">New Prior Authorization</h2>
-          <p className="text-sm text-slate-500">AI-assisted PA request generation</p>
+          <h2 className="text-lg font-semibold text-slate-900">
+            New Prior Authorization
+          </h2>
+          <p className="text-sm text-slate-500">
+            AI-assisted PA request generation
+          </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left column — Form */}
+        {/* ── Left column — Form ── */}
         <div className="space-y-6 lg:col-span-2">
           {/* Patient Selection */}
           <Card>
@@ -77,23 +221,23 @@ export default function NewAuthorization() {
               <h3 className="font-medium text-slate-900">Patient Information</h3>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Select Patient
-                </label>
-                <select
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  value={selectedPatient}
-                  onChange={(e) => setSelectedPatient(e.target.value)}
+              <Field label="Select Patient">
+                <NativeSelect
+                  value={selectedPatientId}
+                  onChange={setSelectedPatientId}
+                  disabled={loadingData}
                 >
-                  <option value="">Choose a patient...</option>
-                  {MOCK_PATIENTS.map((p) => (
+                  <option value="">
+                    {loadingData ? "Loading patients..." : "Choose a patient..."}
+                  </option>
+                  {patients.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} — {p.payer} ({p.memberId})
+                      {p.lastName}, {p.firstName} —{" "}
+                      {p.payer?.name ?? p.payerId} ({p.memberId})
                     </option>
                   ))}
-                </select>
-              </div>
+                </NativeSelect>
+              </Field>
               {patient && (
                 <div className="grid grid-cols-3 gap-4 rounded-lg bg-slate-50 p-3 text-sm">
                   <div>
@@ -102,14 +246,112 @@ export default function NewAuthorization() {
                   </div>
                   <div>
                     <span className="text-slate-500">Member ID:</span>{" "}
-                    <span className="font-mono font-medium">{patient.memberId}</span>
+                    <span className="font-mono font-medium">
+                      {patient.memberId}
+                    </span>
                   </div>
                   <div>
                     <span className="text-slate-500">Payer:</span>{" "}
-                    <span className="font-medium">{patient.payer}</span>
+                    <span className="font-medium">
+                      {patient.payer?.name ?? patient.payerId}
+                    </span>
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Provider Selection */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-medium text-slate-900">Treating Provider</h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Field label="Select Provider">
+                <NativeSelect
+                  value={selectedProviderId}
+                  onChange={setSelectedProviderId}
+                  disabled={loadingData}
+                >
+                  <option value="">
+                    {loadingData ? "Loading providers..." : "Choose a provider..."}
+                  </option>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.lastName}, {p.firstName}{p.suffix ? ` ${p.suffix}` : ""} — {p.discipline} · NPI {p.npi}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+              {provider && (
+                <div className="grid grid-cols-3 gap-4 rounded-lg bg-slate-50 p-3 text-sm">
+                  <div>
+                    <span className="text-slate-500">Discipline:</span>{" "}
+                    <span className="font-medium">{provider.discipline}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">NPI:</span>{" "}
+                    <span className="font-mono font-medium">{provider.npi}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Service Type:</span>{" "}
+                    <span className="font-medium">{serviceTypeCode}</span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Authorization Type */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-medium text-slate-900">Authorization Details</h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Certification Type">
+                  <NativeSelect
+                    value={certificationTypeCode}
+                    onChange={setCertificationTypeCode}
+                  >
+                    {Object.entries(CERTIFICATION_TYPES).map(([code, label]) => (
+                      <option key={code} value={code}>
+                        {code} — {label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field label="Level of Service">
+                  <NativeSelect
+                    value={levelOfServiceCode}
+                    onChange={setLevelOfServiceCode}
+                  >
+                    {Object.entries(LEVEL_OF_SERVICE_CODES).map(
+                      ([code, label]) => (
+                        <option key={code} value={code}>
+                          {code} — {label}
+                        </option>
+                      )
+                    )}
+                  </NativeSelect>
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Start Date">
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </Field>
+                <Field label="End Date">
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
+                </Field>
+              </div>
             </CardContent>
           </Card>
 
@@ -119,31 +361,29 @@ export default function NewAuthorization() {
               <h3 className="font-medium text-slate-900">Service Details</h3>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  CPT Codes
-                </label>
+              <Field label="CPT Codes">
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(THERAPY_CPT_CODES).slice(0, 12).map(([code, desc]) => (
-                    <button
-                      key={code}
-                      onClick={() => toggleCpt(code)}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                        selectedCpts.includes(code)
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                      }`}
-                    >
-                      {code} — {desc}
-                    </button>
-                  ))}
+                  {Object.entries(THERAPY_CPT_CODES)
+                    .slice(0, 14)
+                    .map(([code, desc]) => (
+                      <button
+                        key={code}
+                        onClick={() => toggleCpt(code)}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                          selectedCpts.includes(code)
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {code} — {desc}
+                      </button>
+                    ))}
                 </div>
-              </div>
+              </Field>
+
+              {/* Visit totals */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Requested Visits
-                  </label>
+                <Field label="Total Visits Requested">
                   <Input
                     type="number"
                     value={requestedVisits}
@@ -151,18 +391,63 @@ export default function NewAuthorization() {
                     min={1}
                     max={60}
                   />
+                </Field>
+              </div>
+
+              {/* Visit Pattern (HSD segment) */}
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-700">
+                  Visit Pattern{" "}
+                  <span className="ml-1 text-xs font-normal text-slate-400">
+                    (HSD segment)
+                  </span>
+                </p>
+                <div className="grid grid-cols-3 gap-3">
+                  <Field label="Visits per period">
+                    <Input
+                      type="number"
+                      value={visitsPerPeriod}
+                      onChange={(e) => setVisitsPerPeriod(e.target.value)}
+                      min={1}
+                    />
+                  </Field>
+                  <Field label="Period">
+                    <NativeSelect
+                      value={periodFrequency}
+                      onChange={(v) =>
+                        setPeriodFrequency(v as "WK" | "MO" | "DA")
+                      }
+                    >
+                      <option value="WK">Per Week</option>
+                      <option value="MO">Per Month</option>
+                      <option value="DA">Per Day</option>
+                    </NativeSelect>
+                  </Field>
+                  <Field label="Number of periods">
+                    <Input
+                      type="number"
+                      value={periodCount}
+                      onChange={(e) => setPeriodCount(e.target.value)}
+                      min={1}
+                    />
+                  </Field>
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Frequency
-                  </label>
-                  <select className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                    <option>2x per week</option>
-                    <option>3x per week</option>
-                    <option>1x per week</option>
-                    <option>Daily</option>
-                  </select>
-                </div>
+                {visitsPerPeriod && periodCount && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    Summary: {visitsPerPeriod}x/
+                    {periodFrequency === "WK"
+                      ? "week"
+                      : periodFrequency === "MO"
+                      ? "month"
+                      : "day"}{" "}
+                    × {periodCount}{" "}
+                    {periodFrequency === "WK"
+                      ? "weeks"
+                      : periodFrequency === "MO"
+                      ? "months"
+                      : "days"}
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -171,12 +456,18 @@ export default function NewAuthorization() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <h3 className="font-medium text-slate-900">Clinical Documentation</h3>
+                <h3 className="font-medium text-slate-900">
+                  Clinical Documentation
+                </h3>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleAiGenerate}
-                  disabled={generating || !selectedPatient || selectedCpts.length === 0}
+                  disabled={
+                    generating ||
+                    !selectedPatientId ||
+                    selectedCpts.length === 0
+                  }
                   className="flex items-center gap-1.5"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
@@ -185,17 +476,14 @@ export default function NewAuthorization() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Clinical Notes (paste from EMR or type)
-                </label>
+              <Field label="Clinical Notes (paste from EMR or type)">
                 <textarea
                   className="min-h-[120px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   placeholder="Paste evaluation notes, functional limitations, treatment goals..."
                   value={clinicalNotes}
                   onChange={(e) => setClinicalNotes(e.target.value)}
                 />
-              </div>
+              </Field>
               {aiSummary && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
                   <div className="mb-2 flex items-center gap-1.5">
@@ -204,14 +492,16 @@ export default function NewAuthorization() {
                       AI-Generated Medical Necessity Summary
                     </span>
                   </div>
-                  <p className="text-sm leading-relaxed text-blue-800">{aiSummary}</p>
+                  <p className="text-sm leading-relaxed text-blue-800">
+                    {aiSummary}
+                  </p>
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Right column — Summary & Actions */}
+        {/* ── Right column — Summary & Actions ── */}
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -220,15 +510,35 @@ export default function NewAuthorization() {
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">Patient</span>
-                <span className="font-medium">{patient?.name ?? "—"}</span>
+                <span className="font-medium">
+                  {patient
+                    ? `${patient.lastName}, ${patient.firstName}`
+                    : "—"}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Payer</span>
-                <span className="font-medium">{patient?.payer ?? "—"}</span>
+                <span className="font-medium">
+                  {patient?.payer?.name ?? patient?.payerId ?? "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Provider</span>
+                <span className="font-medium">
+                  {provider
+                    ? `${provider.lastName}, ${provider.firstName}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Cert Type</span>
+                <span className="font-medium">
+                  {CERTIFICATION_TYPES[certificationTypeCode as keyof typeof CERTIFICATION_TYPES] ?? certificationTypeCode}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">CPT Codes</span>
-                <span className="font-mono font-medium">
+                <span className="font-mono font-medium text-xs">
                   {selectedCpts.length > 0 ? selectedCpts.join(", ") : "—"}
                 </span>
               </div>
@@ -244,23 +554,37 @@ export default function NewAuthorization() {
               </div>
               <hr className="my-2 border-slate-200" />
               <div className="flex justify-between">
-                <span className="text-slate-500">Est. Auth Required</span>
-                <Badge variant="pending">Checking...</Badge>
+                <span className="text-slate-500">Level of Service</span>
+                <span className="font-medium">
+                  {LEVEL_OF_SERVICE_CODES[levelOfServiceCode as keyof typeof LEVEL_OF_SERVICE_CODES] ?? levelOfServiceCode}
+                </span>
               </div>
             </CardContent>
           </Card>
 
+          {apiError && (
+            <p className="text-sm text-red-600 rounded-md bg-red-50 border border-red-200 px-3 py-2">
+              {apiError}
+            </p>
+          )}
+
           <div className="space-y-2">
             <Button
               className="w-full"
-              disabled={!selectedPatient || selectedCpts.length === 0 || !aiSummary}
+              disabled={!canSubmit || submitting || savingDraft}
+              onClick={handleSubmit}
             >
               <Send className="mr-2 h-4 w-4" />
-              Submit Authorization
+              {submitting ? "Submitting..." : "Submit Authorization"}
             </Button>
-            <Button variant="outline" className="w-full">
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={!selectedPatientId || submitting || savingDraft}
+              onClick={handleSaveDraft}
+            >
               <Save className="mr-2 h-4 w-4" />
-              Save as Draft
+              {savingDraft ? "Saving..." : "Save as Draft"}
             </Button>
           </div>
 
@@ -271,7 +595,7 @@ export default function NewAuthorization() {
               </h4>
               <p className="text-xs text-slate-500">
                 {patient
-                  ? `${patient.payer} typically requires prior authorization for therapy services exceeding 12 visits. Average turnaround: 3-5 business days.`
+                  ? `${patient.payer?.name ?? "Selected payer"} typically requires prior authorization for therapy services exceeding 12 visits. Average turnaround: 3-5 business days.`
                   : "Select a patient to see payer-specific rules."}
               </p>
             </CardContent>

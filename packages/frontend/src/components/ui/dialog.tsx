@@ -14,7 +14,7 @@ const DialogContext = React.createContext<{
 }>({ open: false, setOpen: () => undefined });
 
 export function Dialog({ open = false, onOpenChange, children }: DialogProps) {
-  const [internalOpen, setInternalOpen] = React.useState(open);
+  const [_internalOpen, setInternalOpen] = React.useState(open);
   const isOpen = open;
   const setOpen = (val: boolean) => {
     setInternalOpen(val);
