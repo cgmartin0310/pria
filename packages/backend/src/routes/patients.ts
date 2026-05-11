@@ -5,12 +5,39 @@ import { db, schema } from "../db/index.js";
 
 const STUB_PRACTICE_ID = "practice_stub_001";
 
+const addressSchema = z.object({
+  street: z.string().min(1),
+  city: z.string().min(1),
+  state: z.string().min(2).max(2),
+  zip: z.string().min(1),
+});
+
 const createPatientSchema = z.object({
+  // Core demographics
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
+  middleName: z.string().max(100).optional(),
   dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  memberId: z.string().min(1),
+  gender: z.enum(["M", "F", "U"]).optional(),
+  phone: z.string().max(20).optional(),
+  address: addressSchema.optional(),
+
+  // Insurance
   payerId: z.string(),
+  memberId: z.string().min(1),
+  groupNumber: z.string().max(50).optional(),
+  relationshipToSubscriber: z.string().default("18"),
+
+  // Subscriber info (required when relationship !== '18')
+  subscriberLastName: z.string().max(100).optional(),
+  subscriberFirstName: z.string().max(100).optional(),
+  subscriberMiddleName: z.string().max(100).optional(),
+  subscriberMemberId: z.string().max(100).optional(),
+  subscriberDob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  subscriberGender: z.enum(["M", "F", "U"]).optional(),
+  subscriberAddress: addressSchema.optional(),
+
+  // Clinical
   diagnosisCodes: z.array(z.string()).default([]),
 });
 

@@ -4,6 +4,7 @@ import Dashboard from "@/pages/Dashboard.js";
 import Authorizations from "@/pages/Authorizations.js";
 import NewAuthorization from "@/pages/NewAuthorization.js";
 import Patients from "@/pages/Patients.js";
+import AddPatient from "@/pages/AddPatient.js";
 import Settings from "@/pages/Settings.js";
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/authorizations" element={<Authorizations />} />
         <Route path="/authorizations/new" element={<NewAuthorization />} />
         <Route path="/patients" element={<Patients />} />
+        <Route path="/patients/new" element={<AddPatient />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
     </Routes>

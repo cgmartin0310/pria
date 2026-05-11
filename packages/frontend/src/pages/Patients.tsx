@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { Plus, Search, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
@@ -107,6 +108,7 @@ const MOCK_PATIENTS = [
 ];
 
 export default function Patients() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
 
   const filtered = MOCK_PATIENTS.filter((p) => {
@@ -134,7 +136,7 @@ export default function Patients() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Button className="flex items-center gap-2">
+        <Button className="flex items-center gap-2" onClick={() => navigate("/patients/new")}>
           <Plus className="h-4 w-4" />
           Add Patient
         </Button>
