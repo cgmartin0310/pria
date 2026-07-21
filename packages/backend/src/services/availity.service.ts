@@ -21,9 +21,16 @@
  * getToken/testConnection below are the verified, testable parts.
  */
 
-const BASE_URL = "https://api.availity.com";
+// Availity is environment-specific: demo/sandbox uses the test host, production
+// uses the live host. (Per Availity's Getting Started docs.)
+const PROD_BASE = "https://api.availity.com";
+const TEST_BASE = "https://tst.api.availity.com";
 const TOKEN_PATH = "/v1/token";
 const TIMEOUT_MS = 15_000;
+
+function baseFor(demo?: boolean): string {
+  return demo ? TEST_BASE : PROD_BASE;
+}
 
 export interface AvailityCredentials {
   clientId: string;
@@ -71,8 +78,10 @@ export async function getToken(creds: AvailityCredentials): Promise<string> {
   };
   if (creds.scope) body["scope"] = creds.scope;
 
+  const tokenUrl = `${baseFor(creds.demo)}${TOKEN_PATH}`;
+
   return withTimeout(async (signal) => {
-    const res = await fetch(`${BASE_URL}${TOKEN_PATH}`, {
+    const res = await fetch(tokenUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -142,4 +151,4 @@ export async function submitServiceReview(): Promise<never> {
   );
 }
 
-export { BASE_URL as AVAILITY_BASE_URL };
+export { PROD_BASE, TEST_BASE };

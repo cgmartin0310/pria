@@ -117,6 +117,7 @@ function ClearinghouseCard({
 }) {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
+  const [scope, setScope] = useState("");
   const [demo, setDemo] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,10 +131,12 @@ function ClearinghouseCard({
         clearinghouseKey: clearinghouse.key,
         clientId: clientId.trim(),
         clientSecret: clientSecret.trim(),
+        scope: scope.trim() || undefined,
         demo,
       });
       setClientId("");
       setClientSecret("");
+      setScope("");
       onChanged();
     } catch (e) {
       setError(
@@ -255,6 +258,21 @@ function ClearinghouseCard({
                     value={clientSecret}
                     onChange={(e) => setClientSecret(e.target.value)}
                   />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Scope
+                  </label>
+                  <Input
+                    placeholder="Two scopes, space-separated (from the product details page)"
+                    className="font-mono"
+                    value={scope}
+                    onChange={(e) => setScope(e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-slate-400">
+                    Availity requires the scope(s) shown on the Service Reviews
+                    product details page in the developer portal.
+                  </p>
                 </div>
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input

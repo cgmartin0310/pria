@@ -97,10 +97,12 @@ export async function connectClearinghouse(
   }
 
   // Validate the credentials against Availity's token endpoint before saving.
+  // demo=true targets the test host (tst.api.availity.com).
   const ok = await availity.testConnection({
     clientId: creds.clientId,
     clientSecret: creds.clientSecret,
     scope: creds.scope,
+    demo: creds.demo,
   });
   if (!ok) {
     throw new ClearinghouseError(
