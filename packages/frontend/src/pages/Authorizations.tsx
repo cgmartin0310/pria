@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router";
-import { Plus, Search, FileText } from "lucide-react";
+import { Plus, Search, FileText, FileCode, Copy, Check, AlertTriangle, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Badge } from "@/components/ui/badge.js";
@@ -15,107 +15,231 @@ import {
 } from "@/components/ui/table.js";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs.js";
 import { formatDate } from "@/lib/utils.js";
-import type { PAStatus } from "@pria/shared";
+import { authorizationsApi, type Preview278 } from "@/lib/api.js";
+import type { PAStatus, AuthorizationWithRelations } from "@pria/shared";
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
+// ─── 278 Preview Dialog ─────────────────────────────────────────────────────────
 
-const MOCK_AUTHS = [
-  {
-    id: "AUTH-2025-001",
-    patient: { name: "Margaret Thompson", id: "P001" },
-    payer: "UnitedHealthcare",
-    cptCodes: ["97110", "97140"],
-    status: "pending" as PAStatus,
-    requestedVisits: 24,
-    approvedVisits: null,
-    submittedAt: "2025-05-06",
-    expiresAt: null,
-    authNumber: null,
-  },
-  {
-    id: "AUTH-2025-002",
-    patient: { name: "Robert Chen", id: "P002" },
-    payer: "Aetna",
-    cptCodes: ["97161", "97110"],
-    status: "approved" as PAStatus,
-    requestedVisits: 16,
-    approvedVisits: 16,
-    submittedAt: "2025-05-04",
-    expiresAt: "2025-08-04",
-    authNumber: "AET-4892847",
-  },
-  {
-    id: "AUTH-2025-003",
-    patient: { name: "Linda Okafor", id: "P003" },
-    payer: "Anthem BCBS",
-    cptCodes: ["92507"],
-    status: "denied" as PAStatus,
-    requestedVisits: 20,
-    approvedVisits: null,
-    submittedAt: "2025-05-03",
-    expiresAt: null,
-    authNumber: null,
-  },
-  {
-    id: "AUTH-2025-004",
-    patient: { name: "James Rivera", id: "P004" },
-    payer: "Cigna",
-    cptCodes: ["97530", "97112"],
-    status: "submitted" as PAStatus,
-    requestedVisits: 12,
-    approvedVisits: null,
-    submittedAt: "2025-05-07",
-    expiresAt: null,
-    authNumber: null,
-  },
-  {
-    id: "AUTH-2025-005",
-    patient: { name: "Susan Park", id: "P005" },
-    payer: "Humana",
-    cptCodes: ["97110", "97012"],
-    status: "approved" as PAStatus,
-    requestedVisits: 18,
-    approvedVisits: 18,
-    submittedAt: "2025-05-02",
-    expiresAt: "2025-08-02",
-    authNumber: "HUM-7723901",
-  },
-  {
-    id: "AUTH-2025-006",
-    patient: { name: "David Williams", id: "P006" },
-    payer: "UnitedHealthcare",
-    cptCodes: ["97110"],
-    status: "appeal" as PAStatus,
-    requestedVisits: 30,
-    approvedVisits: null,
-    submittedAt: "2025-04-28",
-    expiresAt: null,
-    authNumber: null,
-  },
-  {
-    id: "AUTH-2025-007",
-    patient: { name: "Patricia Moore", id: "P007" },
-    payer: "Medicare",
-    cptCodes: ["97165", "97110", "97140"],
-    status: "draft" as PAStatus,
-    requestedVisits: 20,
-    approvedVisits: null,
-    submittedAt: null,
-    expiresAt: null,
-    authNumber: null,
-  },
-];
+function Preview278Dialog({
+  authId,
+  patientName,
+  onClose,
+}: {
+  authId: string;
+  patientName: string;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [result, setResult] = useState<Preview278 | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    authorizationsApi
+      .preview(authId)
+      .then((res) => {
+        if (!cancelled) setResult(res.data);
+      })
+      .catch((e: { message?: string }) => {
+        if (!cancelled) setError(e?.message ?? "Preview failed");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authId]);
+
+  const copyEdi = () => {
+    if (!result?.edi) return;
+    navigator.clipboard?.writeText(result.edi).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-50 flex max-h-[85vh] w-full max-w-3xl flex-col rounded-xl border border-slate-200 bg-white shadow-lg">
+        <div className="flex items-start justify-between border-b border-slate-100 p-5">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+              <FileCode className="h-5 w-5 text-blue-600" />
+              X12 278 Preview
+            </h2>
+            <p className="text-sm text-slate-500">{patientName}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5">
+          {loading ? (
+            <p className="py-8 text-center text-sm text-slate-400">
+              Assembling and validating…
+            </p>
+          ) : error ? (
+            <p className="py-8 text-center text-sm text-red-600">{error}</p>
+          ) : result ? (
+            <div className="space-y-4">
+              {/* Status */}
+              <div
+                className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${
+                  result.valid
+                    ? "border-green-200 bg-green-50 text-green-800"
+                    : "border-red-200 bg-red-50 text-red-800"
+                }`}
+              >
+                {result.valid ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    <span>Ready to submit — the 278 generated successfully.</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="h-4 w-4" />
+                    <span>
+                      Not ready — fix the errors below before this can be submitted.
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Errors */}
+              {result.errors.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-sm font-medium text-red-700">
+                    Errors ({result.errors.length})
+                  </p>
+                  <ul className="space-y-1">
+                    {result.errors.map((e, i) => (
+                      <li
+                        key={i}
+                        className="flex gap-2 rounded-md bg-red-50 px-3 py-1.5 text-sm text-red-700"
+                      >
+                        <span className="text-red-400">•</span>
+                        <span>{e}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {result.warnings.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-sm font-medium text-amber-700">
+                    Warnings ({result.warnings.length})
+                  </p>
+                  <ul className="space-y-1">
+                    {result.warnings.map((w, i) => (
+                      <li
+                        key={i}
+                        className="flex gap-2 rounded-md bg-amber-50 px-3 py-1.5 text-sm text-amber-700"
+                      >
+                        <span className="text-amber-400">•</span>
+                        <span>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Generated EDI */}
+              {result.edi && (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <p className="text-sm font-medium text-slate-700">
+                      Generated X12 278
+                    </p>
+                    <Button variant="outline" size="sm" onClick={copyEdi}>
+                      {copied ? (
+                        <>
+                          <Check className="h-3.5 w-3.5" /> Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" /> Copy
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <pre className="max-h-72 overflow-auto rounded-md border border-slate-200 bg-slate-900 p-3 font-mono text-xs leading-relaxed text-slate-100">
+                    {result.edi}
+                  </pre>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Each segment ends with <span className="font-mono">~</span>. This
+                    is the exact transaction that will be sent to the clearinghouse.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────────
+
+interface Row {
+  id: string;
+  patientName: string;
+  payerName: string;
+  cptCodes: string[];
+  status: PAStatus;
+  requestedVisits: number;
+  approvedVisits: number | null;
+  submittedAt: string | null;
+  authNumber: string | null;
+}
+
+function toRow(a: AuthorizationWithRelations): Row {
+  return {
+    id: a.id,
+    patientName: a.patient
+      ? `${a.patient.firstName} ${a.patient.lastName}`
+      : a.patientId,
+    payerName: a.payer?.name ?? a.payerId,
+    cptCodes: a.cptCodes ?? [],
+    status: a.status,
+    requestedVisits: a.requestedVisits,
+    approvedVisits: a.approvedVisits ?? null,
+    submittedAt: a.submittedAt ? String(a.submittedAt) : null,
+    authNumber: a.authNumber,
+  };
+}
 
 export default function Authorizations() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [previewFor, setPreviewFor] = useState<Row | null>(null);
 
-  const filtered = MOCK_AUTHS.filter((auth) => {
+  const load = useCallback(() => {
+    setLoading(true);
+    authorizationsApi
+      .list({ pageSize: "100" })
+      .then((res) => setRows((res.data ?? []).map(toRow)))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => load(), [load]);
+
+  const filtered = rows.filter((auth) => {
+    const q = search.toLowerCase();
     const matchSearch =
       !search ||
-      auth.patient.name.toLowerCase().includes(search.toLowerCase()) ||
-      auth.id.toLowerCase().includes(search.toLowerCase()) ||
-      auth.payer.toLowerCase().includes(search.toLowerCase());
+      auth.patientName.toLowerCase().includes(q) ||
+      auth.id.toLowerCase().includes(q) ||
+      auth.payerName.toLowerCase().includes(q);
     const matchTab = activeTab === "all" || auth.status === activeTab;
     return matchSearch && matchTab;
   });
@@ -174,26 +298,33 @@ export default function Authorizations() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {loading ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={9}
-                    className="py-12 text-center text-slate-500"
-                  >
+                  <TableCell colSpan={9} className="py-12 text-center text-slate-400">
+                    Loading…
+                  </TableCell>
+                </TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-12 text-center text-slate-500">
                     <FileText className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-                    No authorizations found
+                    No authorizations found.{" "}
+                    <Link to="/authorizations/new" className="text-blue-600 underline">
+                      Create one
+                    </Link>
+                    .
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((auth) => (
                   <TableRow key={auth.id}>
                     <TableCell className="font-mono text-xs text-slate-600">
-                      {auth.id}
+                      {auth.id.slice(0, 8)}…
                     </TableCell>
                     <TableCell className="font-medium text-slate-900">
-                      {auth.patient.name}
+                      {auth.patientName}
                     </TableCell>
-                    <TableCell className="text-slate-600">{auth.payer}</TableCell>
+                    <TableCell className="text-slate-600">{auth.payerName}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {auth.cptCodes.map((code) => (
@@ -208,8 +339,7 @@ export default function Authorizations() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={auth.status}>
-                        {auth.status.charAt(0).toUpperCase() +
-                          auth.status.slice(1)}
+                        {auth.status.charAt(0).toUpperCase() + auth.status.slice(1)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-slate-600">
@@ -223,15 +353,20 @@ export default function Authorizations() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-slate-500 text-sm">
+                    <TableCell className="text-sm text-slate-500">
                       {formatDate(auth.submittedAt) ?? "—"}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-slate-500">
                       {auth.authNumber ?? "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
-                        View
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setPreviewFor(auth)}
+                      >
+                        <FileCode className="h-3.5 w-3.5" />
+                        Preview 278
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -243,8 +378,16 @@ export default function Authorizations() {
       </Card>
 
       <p className="text-xs text-slate-400">
-        Showing {filtered.length} of {MOCK_AUTHS.length} authorizations
+        Showing {filtered.length} authorization{filtered.length !== 1 ? "s" : ""}
       </p>
+
+      {previewFor && (
+        <Preview278Dialog
+          authId={previewFor.id}
+          patientName={previewFor.patientName}
+          onClose={() => setPreviewFor(null)}
+        />
+      )}
     </div>
   );
 }

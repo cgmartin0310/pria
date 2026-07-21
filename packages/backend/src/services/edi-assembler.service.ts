@@ -1,5 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
+import { generateX278Request } from "./edi.service.js";
 import type { X12278Request, ServiceLine } from "@pria/shared";
 import {
   DISCIPLINE_TO_SERVICE_TYPE,
@@ -316,6 +317,63 @@ export async function assembleX278Request(
   };
 
   return { request, warnings };
+}
+
+// ─── Preview ──────────────────────────────────────────────────────────────────
+
+export interface PreviewResult {
+  /** True when all required fields are present and the 278 could be generated. */
+  valid: boolean;
+  /** Hard errors that block generation (empty when valid). */
+  errors: string[];
+  /** Non-fatal warnings about missing recommended fields. */
+  warnings: string[];
+  /** The generated X12 278 string, or null when not valid. */
+  edi: string | null;
+}
+
+/**
+ * Validate an authorization for 278 generation and, when valid, return the
+ * generated X12 278 — without throwing. Powers the "Preview 278" UI so users
+ * can see exactly what will be sent (and what's missing) before submitting.
+ */
+export async function previewX278(
+  authorizationId: string,
+  practiceId: string
+): Promise<PreviewResult> {
+  const auth = await db.query.authorizations.findFirst({
+    where: and(
+      eq(authorizations.id, authorizationId),
+      eq(authorizations.practiceId, practiceId)
+    ),
+    with: { practice: true, patient: true, payer: true, provider: true },
+  });
+
+  if (!auth) {
+    throw new Error(`Authorization ${authorizationId} not found`);
+  }
+
+  const validation = validateFor278(
+    auth,
+    auth.practice,
+    auth.provider ?? null,
+    auth.patient,
+    auth.payer
+  );
+
+  if (!validation.valid) {
+    return {
+      valid: false,
+      errors: validation.errors,
+      warnings: validation.warnings,
+      edi: null,
+    };
+  }
+
+  const { request, warnings } = await assembleX278Request(authorizationId, practiceId);
+  const edi = generateX278Request(request);
+
+  return { valid: true, errors: [], warnings, edi };
 }
 
 // ─── Validation ───────────────────────────────────────────────────────────────

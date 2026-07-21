@@ -98,7 +98,16 @@ export const authorizationsApi = {
       `/authorizations/${id}/generate-summary`
     ),
   stats: () => api.get<ApiResponse<DashboardStats>>("/authorizations/stats"),
+  preview: (id: string) =>
+    api.get<ApiResponse<Preview278>>(`/authorizations/${id}/preview`),
 };
+
+export interface Preview278 {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  edi: string | null;
+}
 
 export const patientsApi = {
   list: (params?: Record<string, string>) => {

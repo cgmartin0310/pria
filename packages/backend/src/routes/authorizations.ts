@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import * as paService from "../services/pa.service.js";
+import { previewX278 } from "../services/edi-assembler.service.js";
 
 const createAuthSchema = z.object({
   patientId: z.string(),
@@ -45,6 +46,22 @@ export async function authorizationRoutes(app: FastifyInstance) {
       });
     }
     return reply.send({ data: auth });
+  });
+
+  // Preview + validate the X12 278 for an authorization (no submission)
+  app.get("/authorizations/:id/preview", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const result = await previewX278(id, req.auth.practiceId);
+      return reply.send({ data: result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Preview failed";
+      return reply.status(404).send({
+        error: "NOT_FOUND",
+        message,
+        statusCode: 404,
+      });
+    }
   });
 
   // Create authorization
