@@ -8,7 +8,7 @@ import { db, schema } from "./index.js";
  * Safe to fail — if the tables don't exist yet (migrations not applied), the
  * caller logs and continues rather than crashing the server.
  */
-const CLEARINGHOUSES = [{ key: "claim_md", name: "Claim.MD", isActive: true }];
+const CLEARINGHOUSES = [{ key: "availity", name: "Availity", isActive: true }];
 
 export async function ensureBaselineData(): Promise<void> {
   for (const ch of CLEARINGHOUSES) {

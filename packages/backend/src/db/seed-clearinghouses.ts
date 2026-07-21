@@ -15,7 +15,7 @@ loadEnv();
 const { Pool } = pg;
 
 const CLEARINGHOUSES = [
-  { key: "claim_md", name: "Claim.MD", isActive: true },
+  { key: "availity", name: "Availity", isActive: true },
 ];
 
 async function seed() {

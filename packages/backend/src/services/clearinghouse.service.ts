@@ -64,15 +64,15 @@ export async function connectClearinghouse(
   });
   if (!ch) throw new ClearinghouseError(404, "Unknown clearinghouse");
 
-  // Validate the credential against the real API before saving (Claim.MD only).
-  if (clearinghouseKey === "claim_md") {
-    const ok = await claimmd.testConnection(accountKey);
-    if (!ok) {
-      throw new ClearinghouseError(
-        400,
-        "Claim.MD rejected that Account Key — double-check it in Claim.MD → Settings → Account Settings"
-      );
-    }
+  // Only networks with a live adapter can be connected. Availity (278/Service
+  // Reviews) requires OAuth credentials via their gated developer onboarding —
+  // its adapter is built once API access is verified.
+  const IMPLEMENTED_ADAPTERS = new Set<string>();
+  if (!IMPLEMENTED_ADAPTERS.has(clearinghouseKey)) {
+    throw new ClearinghouseError(
+      400,
+      `${ch.name} integration is being set up and isn't available to connect yet.`
+    );
   }
 
   const [row] = await db
