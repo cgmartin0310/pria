@@ -5,7 +5,6 @@ import { db, schema } from "../db/index.js";
 import * as ediService from "../services/edi.service.js";
 import { assembleX278Request } from "../services/edi-assembler.service.js";
 import { getRoutingForPayer } from "../services/clearinghouse.service.js";
-import * as claimmd from "../services/claimmd.service.js";
 import type { PASubmitJobData } from "../types/index.js";
 
 const { authorizations, authorizationHistory } = schema;
@@ -91,7 +90,7 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
     // ── Route to the practice's connected clearinghouse ───────────────────
     const routing = await getRoutingForPayer(practiceId, auth.payerId);
 
-    if (!routing || !routing.accountKey) {
+    if (!routing) {
       // No clearinghouse connected for this payer — falls back to manual.
       await db
         .update(authorizations)
@@ -129,57 +128,40 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
     }
 
     // ── Submit through the clearinghouse adapter ──────────────────────────
-    let submissionId: string | null = null;
-    let submissionMessages: string[] = [];
+    // The 278 is fully generated. Live submission via Availity's Service Reviews
+    // API is pending confirmation of the endpoint from their API reference, so
+    // for now we hold the auth as pending with the EDI recorded rather than
+    // pretending it was transmitted.
+    if (routing.clearinghouseKey === "availity") {
+      await db
+        .update(authorizations)
+        .set({ status: "pending", submittedAt: new Date(), updatedAt: new Date() })
+        .where(eq(authorizations.id, authorizationId));
 
-    if (routing.clearinghouseKey === "claim_md") {
-      const result = await claimmd.uploadEdi(
-        routing.accountKey,
-        ediContent,
-        `278_${authorizationId}.txt`
-      );
-      submissionId = result.submissionId;
-      submissionMessages = result.messages;
-    } else {
-      throw new Error(`No adapter implemented for clearinghouse ${routing.clearinghouseKey}`);
+      const notes = [
+        `X12 278 generated (${ediContent.length} chars, ` +
+          `${ediContent.split("~").length - 1} segments) and routed to Availity` +
+          (routing.credentials?.demo ? " (demo)" : "") +
+          `. Live Service Reviews submission not yet enabled — awaiting endpoint configuration.`,
+        assemblyWarnings.length > 0
+          ? `Assembly warnings: ${assemblyWarnings.join(" | ")}`
+          : null,
+      ]
+        .filter((n): n is string => n !== null)
+        .join("\n");
+
+      await db.insert(authorizationHistory).values({
+        authorizationId,
+        action: "edi_generated",
+        fromStatus: "submitted",
+        toStatus: "pending",
+        notes,
+        performedBy: "system",
+      });
+      return;
     }
 
-    console.log(
-      `[pa-submit] 278 submitted via ${routing.clearinghouseKey}. Submission ID: ${submissionId ?? "n/a"}`
-    );
-
-    // ── Update authorization status ───────────────────────────────────────
-    await db
-      .update(authorizations)
-      .set({
-        status: "pending",
-        submittedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(authorizations.id, authorizationId));
-
-    // ── Record in authorization history ───────────────────────────────────
-    const historyNotes = [
-      `X12 278 submitted via ${routing.clearinghouseKey}` +
-        (submissionId ? ` (submission ${submissionId})` : ""),
-      submissionMessages.length > 0
-        ? `Clearinghouse messages: ${submissionMessages.join(" | ")}`
-        : null,
-      assemblyWarnings.length > 0
-        ? `Assembly warnings: ${assemblyWarnings.join(" | ")}`
-        : null,
-    ]
-      .filter((n): n is string => n !== null)
-      .join("\n");
-
-    await db.insert(authorizationHistory).values({
-      authorizationId,
-      action: "edi_submitted",
-      fromStatus: "submitted",
-      toStatus: "pending",
-      notes: historyNotes,
-      performedBy: "system",
-    });
+    throw new Error(`No adapter implemented for clearinghouse ${routing.clearinghouseKey}`);
   },
   {
     connection: redisConnection,

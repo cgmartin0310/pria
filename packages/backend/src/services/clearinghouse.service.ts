@@ -1,6 +1,15 @@
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import * as claimmd from "./claimmd.service.js";
+import * as availity from "./availity.service.js";
+
+/** Credentials accepted when connecting a clearinghouse. */
+export interface ConnectCredentials {
+  clientId?: string;
+  clientSecret?: string;
+  scope?: string;
+  demo?: boolean;
+}
 
 const { clearinghouses, practiceClearinghouses, clearinghousePayers, payers } =
   schema;
@@ -20,6 +29,16 @@ function maskKey(key?: string): string | null {
   if (!key) return null;
   if (key.length <= 4) return "••••";
   return `••••${key.slice(-4)}`;
+}
+
+/** Best identifier to show for a connection's credential, never the secret. */
+function credentialLabel(creds: {
+  accountKey?: string;
+  clientId?: string;
+}): string | null {
+  if (creds.clientId) return maskKey(creds.clientId);
+  if (creds.accountKey) return maskKey(creds.accountKey);
+  return null;
 }
 
 export async function listConnections(practiceId: string) {
@@ -45,7 +64,8 @@ export async function listConnections(practiceId: string) {
     clearinghouseKey: r.clearinghouse.key,
     clearinghouseName: r.clearinghouse.name,
     label: r.label,
-    accountKeyMasked: maskKey(r.credentials?.accountKey),
+    accountKeyMasked: credentialLabel(r.credentials ?? {}),
+    demo: r.credentials?.demo ?? false,
     isActive: r.isActive,
     lastSyncedAt: r.lastSyncedAt,
     payerCount: countMap.get(r.clearinghouseId) ?? 0,
@@ -56,7 +76,7 @@ export async function listConnections(practiceId: string) {
 export async function connectClearinghouse(
   practiceId: string,
   clearinghouseKey: string,
-  accountKey: string,
+  creds: ConnectCredentials,
   label?: string
 ) {
   const ch = await db.query.clearinghouses.findFirst({
@@ -64,16 +84,38 @@ export async function connectClearinghouse(
   });
   if (!ch) throw new ClearinghouseError(404, "Unknown clearinghouse");
 
-  // Only networks with a live adapter can be connected. Availity (278/Service
-  // Reviews) requires OAuth credentials via their gated developer onboarding —
-  // its adapter is built once API access is verified.
-  const IMPLEMENTED_ADAPTERS = new Set<string>();
-  if (!IMPLEMENTED_ADAPTERS.has(clearinghouseKey)) {
+  // Only networks with a live adapter can be connected.
+  if (clearinghouseKey !== "availity") {
     throw new ClearinghouseError(
       400,
       `${ch.name} integration is being set up and isn't available to connect yet.`
     );
   }
+
+  if (!creds.clientId || !creds.clientSecret) {
+    throw new ClearinghouseError(400, "Client ID and Client Secret are required");
+  }
+
+  // Validate the credentials against Availity's token endpoint before saving.
+  const ok = await availity.testConnection({
+    clientId: creds.clientId,
+    clientSecret: creds.clientSecret,
+    scope: creds.scope,
+  });
+  if (!ok) {
+    throw new ClearinghouseError(
+      400,
+      "Availity rejected those credentials — check the Client ID / Client Secret " +
+        "(and that your app is subscribed to an API product)."
+    );
+  }
+
+  const stored = {
+    clientId: creds.clientId,
+    clientSecret: creds.clientSecret,
+    scope: creds.scope,
+    demo: creds.demo ?? false,
+  };
 
   const [row] = await db
     .insert(practiceClearinghouses)
@@ -81,13 +123,13 @@ export async function connectClearinghouse(
       practiceId,
       clearinghouseId: ch.id,
       label: label ?? ch.name,
-      credentials: { accountKey },
+      credentials: stored,
       isActive: true,
     })
     .onConflictDoUpdate({
       target: [practiceClearinghouses.practiceId, practiceClearinghouses.clearinghouseId],
       set: {
-        credentials: { accountKey },
+        credentials: stored,
         label: label ?? ch.name,
         isActive: true,
         updatedAt: new Date(),
@@ -315,7 +357,7 @@ export async function getRoutingForPayer(practiceId: string, payerId: string) {
   return {
     connectionId: best.connectionId,
     clearinghouseKey: best.clearinghouseKey,
-    accountKey: best.credentials?.accountKey ?? null,
+    credentials: best.credentials ?? null,
     clearinghousePayerId: best.clearinghousePayerId,
     supports278: best.supports278,
   };

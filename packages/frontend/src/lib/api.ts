@@ -172,6 +172,7 @@ export interface ClearinghouseConnection {
   clearinghouseName: string;
   label: string | null;
   accountKeyMasked: string | null;
+  demo: boolean;
   isActive: boolean;
   lastSyncedAt: string | null;
   payerCount: number;
@@ -189,7 +190,14 @@ export const clearinghouseApi = {
   list: () => api.get<ApiResponse<Clearinghouse[]>>("/clearinghouses"),
   connections: () =>
     api.get<ApiResponse<ClearinghouseConnection[]>>("/clearinghouses/connections"),
-  connect: (data: { clearinghouseKey: string; accountKey: string; label?: string }) =>
+  connect: (data: {
+    clearinghouseKey: string;
+    clientId: string;
+    clientSecret: string;
+    scope?: string;
+    demo?: boolean;
+    label?: string;
+  }) =>
     api.post<ApiResponse<{ id: string; connected: boolean }>>(
       "/clearinghouses/connect",
       data

@@ -527,7 +527,16 @@ export const practiceClearinghouses = pgTable(
      */
     credentials: jsonb("credentials")
       .notNull()
-      .$type<{ accountKey?: string }>()
+      .$type<{
+        /** Claim.MD-style single key (legacy). */
+        accountKey?: string;
+        /** Availity OAuth2 client credentials. */
+        clientId?: string;
+        clientSecret?: string;
+        scope?: string;
+        /** Availity demo/sandbox mode (canned mock responses). */
+        demo?: boolean;
+      }>()
       .default({}),
     isActive: boolean("is_active").notNull().default(true),
     lastSyncedAt: timestamp("last_synced_at"),

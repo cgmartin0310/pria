@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, X, Check, RefreshCw, Link2, Search } from "lucide-react";
+import { Plus, X, Check, RefreshCw, Link2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
@@ -8,7 +8,6 @@ import {
   clearinghouseApi,
   type Clearinghouse,
   type ClearinghouseConnection,
-  type DirectoryPayer,
 } from "@/lib/api.js";
 
 function formatDate(d: string | null): string {
@@ -20,9 +19,9 @@ function formatDate(d: string | null): string {
   }
 }
 
-// ─── Payer directory search + import ────────────────────────────────────────────
+// ─── Manual payer add ───────────────────────────────────────────────────────────
 
-function PayerDirectory({
+function AddPayer({
   connectionId,
   isAdmin,
   onChanged,
@@ -31,50 +30,31 @@ function PayerDirectory({
   isAdmin: boolean;
   onChanged: () => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<DirectoryPayer[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [name, setName] = useState("");
+  const [payerId, setPayerId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [adding, setAdding] = useState<string | null>(null);
-  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
-      setSearching(false);
-      setError(null);
-      return;
-    }
-    setSearching(true);
+  const handleAdd = async () => {
+    if (!name.trim() || !payerId.trim()) return;
+    setSaving(true);
     setError(null);
-    const handle = setTimeout(() => {
-      clearinghouseApi
-        .searchPayers(connectionId, q)
-        .then((res) => setResults(res.data ?? []))
-        .catch((e: { message?: string }) => {
-          setResults([]);
-          setError(e?.message ?? "Search failed");
-        })
-        .finally(() => setSearching(false));
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [query, connectionId]);
-
-  const handleAdd = async (p: DirectoryPayer) => {
-    setAdding(p.clearinghousePayerId);
+    setSaved(false);
     try {
       await clearinghouseApi.addPayer(connectionId, {
-        clearinghousePayerId: p.clearinghousePayerId,
-        name: p.name,
-        capabilities: p.capabilities,
+        clearinghousePayerId: payerId.trim(),
+        name: name.trim(),
       });
-      setAddedIds((prev) => new Set(prev).add(p.clearinghousePayerId));
+      setName("");
+      setPayerId("");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
       onChanged();
-    } catch {
-      /* surfaced via disabled state; user can retry */
+    } catch (e) {
+      setError((e as { message?: string })?.message ?? "Couldn't add payer");
     } finally {
-      setAdding(null);
+      setSaving(false);
     }
   };
 
@@ -83,70 +63,40 @@ function PayerDirectory({
       <div>
         <p className="text-sm font-medium text-slate-700">Add payers</p>
         <p className="text-xs text-slate-500">
-          Search this clearinghouse's directory and add the payers your practice
-          works with. Added payers appear in patient &amp; authorization forms.
+          Add the payers your practice works with (name + their EDI payer ID).
+          Added payers appear in patient &amp; authorization forms.
         </p>
       </div>
-
-      <div className="relative">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+      <div className="grid grid-cols-[1fr,180px,auto] gap-2">
         <Input
-          placeholder="Search payers by name (e.g. Aetna, UnitedHealthcare)…"
-          className="pl-8"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Payer name (e.g. Aetna)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          disabled={!isAdmin}
         />
+        <Input
+          placeholder="Payer ID"
+          className="font-mono"
+          value={payerId}
+          onChange={(e) => setPayerId(e.target.value)}
+          disabled={!isAdmin}
+        />
+        <Button
+          onClick={handleAdd}
+          disabled={!isAdmin || saving || !name.trim() || !payerId.trim()}
+        >
+          <Plus className="h-4 w-4" />
+          {saving ? "Adding…" : "Add"}
+        </Button>
       </div>
-
-      {error && <p className="text-xs text-amber-600">{error}</p>}
-
-      {query.trim().length >= 2 && (
-        <div className="max-h-72 overflow-y-auto rounded-md border border-slate-200">
-          {searching ? (
-            <p className="p-3 text-sm text-slate-400">Searching…</p>
-          ) : results.length === 0 ? (
-            <p className="p-3 text-sm text-slate-400">No matching payers</p>
-          ) : (
-            results.map((p) => {
-              const added = p.added || addedIds.has(p.clearinghousePayerId);
-              return (
-                <div
-                  key={p.clearinghousePayerId}
-                  className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2 last:border-b-0"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-slate-800">{p.name}</p>
-                    <p className="font-mono text-xs text-slate-400">
-                      {p.clearinghousePayerId}
-                      {p.capabilities?.["eligibility"] === "yes" && " · eligibility"}
-                      {p.capabilities?.["era"] === "yes" && " · era"}
-                    </p>
-                  </div>
-                  {added ? (
-                    <span className="flex items-center gap-1 text-xs font-medium text-green-600">
-                      <Check className="h-3.5 w-3.5" /> Added
-                    </span>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!isAdmin || adding === p.clearinghousePayerId}
-                      onClick={() => handleAdd(p)}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      {adding === p.clearinghousePayerId ? "Adding…" : "Add"}
-                    </Button>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
-      {!isAdmin && (
-        <p className="text-xs text-slate-400">
-          Only practice admins can add payers.
+      {saved && (
+        <p className="flex items-center gap-1 text-xs text-green-600">
+          <Check className="h-3.5 w-3.5" /> Payer added
         </p>
+      )}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      {!isAdmin && (
+        <p className="text-xs text-slate-400">Only practice admins can add payers.</p>
       )}
     </div>
   );
@@ -165,25 +115,30 @@ function ClearinghouseCard({
   isAdmin: boolean;
   onChanged: () => void;
 }) {
-  const [accountKey, setAccountKey] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [demo, setDemo] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleConnect = async () => {
-    if (!accountKey.trim()) return;
+    if (!clientId.trim() || !clientSecret.trim()) return;
     setBusy(true);
     setError(null);
     try {
       await clearinghouseApi.connect({
         clearinghouseKey: clearinghouse.key,
-        accountKey: accountKey.trim(),
+        clientId: clientId.trim(),
+        clientSecret: clientSecret.trim(),
+        demo,
       });
-      setAccountKey("");
+      setClientId("");
+      setClientSecret("");
       onChanged();
     } catch (e) {
       setError(
         (e as { message?: string })?.message ??
-          "Couldn't connect — check your Account Key and try again."
+          "Couldn't connect — check your credentials and try again."
       );
     } finally {
       setBusy(false);
@@ -208,6 +163,11 @@ function ClearinghouseCard({
           <div className="flex items-center gap-2">
             <Link2 className="h-4 w-4 text-slate-500" />
             <h3 className="font-medium text-slate-900">{clearinghouse.name}</h3>
+            {connection?.demo && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                Demo
+              </span>
+            )}
           </div>
           {connection ? (
             <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
@@ -225,7 +185,7 @@ function ClearinghouseCard({
           <>
             <div className="grid grid-cols-3 gap-3 text-sm">
               <div>
-                <p className="text-xs text-slate-400">Account Key</p>
+                <p className="text-xs text-slate-400">Client ID</p>
                 <p className="font-mono text-slate-700">
                   {connection.accountKeyMasked ?? "—"}
                 </p>
@@ -241,7 +201,7 @@ function ClearinghouseCard({
             </div>
 
             <div className="border-t border-slate-100 pt-4">
-              <PayerDirectory
+              <AddPayer
                 connectionId={connection.id}
                 isAdmin={isAdmin}
                 onChanged={onChanged}
@@ -267,32 +227,58 @@ function ClearinghouseCard({
           <>
             <p className="text-sm text-slate-500">
               Connect your {clearinghouse.name} account to send 278 prior-auth
-              requests. Generate an Account Key in {clearinghouse.name} → Settings →
-              Account Settings.
+              requests. Create an app in the {clearinghouse.name} developer portal,
+              subscribe it to an API product, then paste its OAuth Client ID and
+              Client Secret here.
             </p>
             {isAdmin ? (
-              <div className="flex items-end gap-3">
-                <div className="flex-1">
+              <div className="space-y-3">
+                <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Account Key
+                    Client ID
+                  </label>
+                  <Input
+                    placeholder="Your app's Client ID"
+                    className="font-mono"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Client Secret
                   </label>
                   <Input
                     type="password"
-                    placeholder="Paste your Account Key"
+                    placeholder="Your app's Client Secret"
                     className="font-mono"
-                    value={accountKey}
-                    onChange={(e) => setAccountKey(e.target.value)}
+                    value={clientSecret}
+                    onChange={(e) => setClientSecret(e.target.value)}
                   />
                 </div>
-                <Button onClick={handleConnect} disabled={busy || !accountKey.trim()}>
-                  {busy ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 animate-spin" /> Connecting…
-                    </>
-                  ) : (
-                    "Connect"
-                  )}
-                </Button>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={demo}
+                    onChange={(e) => setDemo(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                  />
+                  Demo / sandbox mode (canned responses, no PHI)
+                </label>
+                <div>
+                  <Button
+                    onClick={handleConnect}
+                    disabled={busy || !clientId.trim() || !clientSecret.trim()}
+                  >
+                    {busy ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" /> Connecting…
+                      </>
+                    ) : (
+                      "Connect"
+                    )}
+                  </Button>
+                </div>
               </div>
             ) : (
               <p className="text-xs text-slate-400">

@@ -6,7 +6,10 @@ import { requireRole } from "../auth/tenant.js";
 
 const connectSchema = z.object({
   clearinghouseKey: z.string().min(1),
-  accountKey: z.string().min(1),
+  clientId: z.string().min(1),
+  clientSecret: z.string().min(1),
+  scope: z.string().optional(),
+  demo: z.boolean().optional(),
   label: z.string().max(255).optional(),
 });
 
@@ -63,7 +66,12 @@ export async function clearinghouseRoutes(app: FastifyInstance) {
         const row = await chService.connectClearinghouse(
           req.auth.practiceId,
           parsed.data.clearinghouseKey,
-          parsed.data.accountKey,
+          {
+            clientId: parsed.data.clientId,
+            clientSecret: parsed.data.clientSecret,
+            scope: parsed.data.scope,
+            demo: parsed.data.demo,
+          },
           parsed.data.label
         );
         return reply.status(201).send({ data: { id: row?.id, connected: true } });
