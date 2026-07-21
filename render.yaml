@@ -15,7 +15,7 @@ services:
     # Applies any pending Drizzle migrations. Compiled to dist by the build step;
     # the migrate script resolves ./drizzle relative to itself, so CWD (repo root)
     # doesn't matter. Requires DATABASE_URL, which is present in the service env.
-    preDeployCommand: node packages/backend/dist/db/migrate.js
+    preDeployCommand: node packages/backend/dist/db/migrate.js && node packages/backend/dist/db/seed-clearinghouses.js
     envVars:
       - key: NODE_VERSION
         value: "20"

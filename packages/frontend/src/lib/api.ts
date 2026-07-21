@@ -158,6 +158,60 @@ export const authApi = {
   me: () => api.get<ApiResponse<CurrentUser>>("/auth/me"),
 };
 
+export interface Clearinghouse {
+  id: string;
+  key: string;
+  name: string;
+  isActive: boolean;
+}
+
+export interface ClearinghouseConnection {
+  id: string;
+  clearinghouseId: string;
+  clearinghouseKey: string;
+  clearinghouseName: string;
+  label: string | null;
+  accountKeyMasked: string | null;
+  isActive: boolean;
+  lastSyncedAt: string | null;
+  payerCount: number;
+  createdAt: string;
+}
+
+export interface DirectoryPayer {
+  clearinghousePayerId: string;
+  name: string;
+  capabilities: Record<string, string>;
+  added: boolean;
+}
+
+export const clearinghouseApi = {
+  list: () => api.get<ApiResponse<Clearinghouse[]>>("/clearinghouses"),
+  connections: () =>
+    api.get<ApiResponse<ClearinghouseConnection[]>>("/clearinghouses/connections"),
+  connect: (data: { clearinghouseKey: string; accountKey: string; label?: string }) =>
+    api.post<ApiResponse<{ id: string; connected: boolean }>>(
+      "/clearinghouses/connect",
+      data
+    ),
+  disconnect: (id: string) =>
+    api.delete<ApiResponse<{ disconnected: boolean }>>(
+      `/clearinghouses/connections/${id}`
+    ),
+  searchPayers: (connId: string, q: string) =>
+    api.get<ApiResponse<DirectoryPayer[]>>(
+      `/clearinghouses/connections/${connId}/payer-search?q=${encodeURIComponent(q)}`
+    ),
+  addPayer: (
+    connId: string,
+    data: { clearinghousePayerId: string; name: string; capabilities?: Record<string, string> }
+  ) =>
+    api.post<ApiResponse<Payer>>(
+      `/clearinghouses/connections/${connId}/payers`,
+      data
+    ),
+};
+
 export interface Icd10Result {
   code: string;
   name: string;

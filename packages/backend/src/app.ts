@@ -9,6 +9,7 @@ import { payerRoutes } from "./routes/payers.js";
 import { providerRoutes } from "./routes/providers.js";
 import { practiceRoutes } from "./routes/practices.js";
 import { icd10Routes } from "./routes/icd10.js";
+import { clearinghouseRoutes } from "./routes/clearinghouses.js";
 import { tenantAuthPlugin } from "./auth/tenant.js";
 
 export async function buildApp() {
@@ -62,6 +63,7 @@ export async function buildApp() {
       await api.register(providerRoutes);
       await api.register(practiceRoutes);
       await api.register(icd10Routes);
+      await api.register(clearinghouseRoutes);
     },
     { prefix: API_PREFIX }
   );

@@ -10,6 +10,7 @@ import {
   PROVIDER_TAXONOMY_CODES,
 } from "@pria/shared";
 import { practiceApi } from "@/lib/api.js";
+import { ClearinghouseSettings } from "@/components/settings/ClearinghouseSettings.js";
 import type { Practice, ClinicConfig } from "@pria/shared";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -605,11 +606,16 @@ export default function Settings() {
           <Tabs defaultValue="practice">
             <TabsList>
               <TabsTrigger value="practice">Practice Info</TabsTrigger>
+              <TabsTrigger value="clearinghouses">Clearinghouses</TabsTrigger>
               <TabsTrigger value="edi">EDI / Billing Config</TabsTrigger>
             </TabsList>
 
             <TabsContent value="practice" className="mt-4">
               <PracticeInfoTab practice={practice} />
+            </TabsContent>
+
+            <TabsContent value="clearinghouses" className="mt-4">
+              <ClearinghouseSettings />
             </TabsContent>
 
             <TabsContent value="edi" className="mt-4">

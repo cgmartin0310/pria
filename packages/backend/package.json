@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:push": "drizzle-kit push",
-    "seed:payers": "tsx src/db/seed-payers.ts"
+    "seed:payers": "tsx src/db/seed-payers.ts",
+    "seed:clearinghouses": "tsx src/db/seed-clearinghouses.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",

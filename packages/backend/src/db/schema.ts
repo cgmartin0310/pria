@@ -481,6 +481,102 @@ export const payerRules = pgTable(
   ]
 );
 
+// ─── Clearinghouses ───────────────────────────────────────────────────────────
+
+/**
+ * Networks Pria can submit 278s through (Claim.MD, Availity, ...).
+ * Global reference data — the same networks are offered to every practice.
+ */
+export const clearinghouses = pgTable(
+  "clearinghouses",
+  {
+    id: varchar("id", { length: 26 })
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    /** Stable slug used by the code to pick an adapter, e.g. 'claim_md' */
+    key: varchar("key", { length: 50 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    /** Whether an adapter is implemented + selectable */
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("clearinghouses_key_idx").on(t.key)]
+);
+
+/**
+ * A practice's connection to a clearinghouse — holds the API credential and
+ * is the per-practice multi-tenancy boundary for clearinghouse access.
+ */
+export const practiceClearinghouses = pgTable(
+  "practice_clearinghouses",
+  {
+    id: varchar("id", { length: 26 })
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    practiceId: varchar("practice_id", { length: 26 })
+      .notNull()
+      .references(() => practices.id, { onDelete: "cascade" }),
+    clearinghouseId: varchar("clearinghouse_id", { length: 26 })
+      .notNull()
+      .references(() => clearinghouses.id),
+    label: varchar("label", { length: 255 }),
+    /**
+     * API credentials for the clearinghouse. For Claim.MD: { accountKey }.
+     * NOTE: stored as-is for MVP — encrypt at rest before production PHI use.
+     * Never returned to the frontend (masked in responses).
+     */
+    credentials: jsonb("credentials")
+      .notNull()
+      .$type<{ accountKey?: string }>()
+      .default({}),
+    isActive: boolean("is_active").notNull().default(true),
+    lastSyncedAt: timestamp("last_synced_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("practice_ch_practice_idx").on(t.practiceId),
+    uniqueIndex("practice_ch_unique_idx").on(t.practiceId, t.clearinghouseId),
+  ]
+);
+
+/**
+ * The payer directory for a clearinghouse: which payers it reaches, the payer's
+ * ID as known by that clearinghouse, and capability flags. Global per
+ * clearinghouse (Claim.MD's network is the same for everyone).
+ */
+export const clearinghousePayers = pgTable(
+  "clearinghouse_payers",
+  {
+    id: varchar("id", { length: 26 })
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    clearinghouseId: varchar("clearinghouse_id", { length: 26 })
+      .notNull()
+      .references(() => clearinghouses.id, { onDelete: "cascade" }),
+    payerId: varchar("payer_id", { length: 26 })
+      .notNull()
+      .references(() => payers.id, { onDelete: "cascade" }),
+    /** The payer's ID as known by THIS clearinghouse (e.g. Claim.MD payerid). */
+    clearinghousePayerId: varchar("clearinghouse_payer_id", { length: 50 }).notNull(),
+    /**
+     * 278 capability through this clearinghouse. Claim.MD does not publish a
+     * per-payer 278 flag, so this is assumed true on sync and can be turned off
+     * by an admin for payers known not to accept 278.
+     */
+    supports278: boolean("supports_278").notNull().default(true),
+    /** Raw capability flags from the clearinghouse payer list (claims/era/etc). */
+    capabilities: jsonb("capabilities").$type<Record<string, string>>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("ch_payers_ch_idx").on(t.clearinghouseId),
+    index("ch_payers_payer_idx").on(t.payerId),
+    uniqueIndex("ch_payers_unique_idx").on(t.clearinghouseId, t.payerId),
+  ]
+);
+
 // ─── Relations ────────────────────────────────────────────────────────────────
 
 export const practiceRelations = relations(practices, ({ many }) => ({
@@ -574,3 +670,36 @@ export const payerRuleRelations = relations(payerRules, ({ one }) => ({
     references: [payers.id],
   }),
 }));
+
+export const clearinghouseRelations = relations(clearinghouses, ({ many }) => ({
+  connections: many(practiceClearinghouses),
+  payers: many(clearinghousePayers),
+}));
+
+export const practiceClearinghouseRelations = relations(
+  practiceClearinghouses,
+  ({ one }) => ({
+    practice: one(practices, {
+      fields: [practiceClearinghouses.practiceId],
+      references: [practices.id],
+    }),
+    clearinghouse: one(clearinghouses, {
+      fields: [practiceClearinghouses.clearinghouseId],
+      references: [clearinghouses.id],
+    }),
+  })
+);
+
+export const clearinghousePayerRelations = relations(
+  clearinghousePayers,
+  ({ one }) => ({
+    clearinghouse: one(clearinghouses, {
+      fields: [clearinghousePayers.clearinghouseId],
+      references: [clearinghouses.id],
+    }),
+    payer: one(payers, {
+      fields: [clearinghousePayers.payerId],
+      references: [payers.id],
+    }),
+  })
+);

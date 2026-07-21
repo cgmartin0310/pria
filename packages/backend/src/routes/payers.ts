@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import * as payerService from "../services/payer.service.js";
+import * as chService from "../services/clearinghouse.service.js";
 
 export async function payerRoutes(app: FastifyInstance) {
-  // List all payers
+  // List the payers this practice can reach through its connected clearinghouses.
+  // (Payers are added from a clearinghouse directory — see clearinghouse routes.)
   app.get("/payers", async (req, reply) => {
-    const payers = await payerService.listPayers();
+    const payers = await chService.listPracticePayers(req.auth.practiceId);
     return reply.send({ data: payers });
   });
 

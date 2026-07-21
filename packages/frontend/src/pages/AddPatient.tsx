@@ -494,6 +494,15 @@ export default function AddPatient() {
                   </option>
                 ))}
               </NativeSelect>
+              {payers.length === 0 && (
+                <p className="mt-1 text-xs text-amber-600">
+                  No payers yet. Connect a clearinghouse and add payers in{" "}
+                  <Link to="/settings" className="underline">
+                    Settings → Clearinghouses
+                  </Link>
+                  .
+                </p>
+              )}
             </Field>
 
             {/* Member ID — most critical field */}

@@ -4,6 +4,8 @@ import { redisConnection } from "./queue.js";
 import { db, schema } from "../db/index.js";
 import * as ediService from "../services/edi.service.js";
 import { assembleX278Request } from "../services/edi-assembler.service.js";
+import { getRoutingForPayer } from "../services/clearinghouse.service.js";
+import * as claimmd from "../services/claimmd.service.js";
 import type { PASubmitJobData } from "../types/index.js";
 
 const { authorizations, authorizationHistory } = schema;
@@ -86,20 +88,64 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
       throw new Error(`Failed to assemble/generate X12 278: ${msg}`);
     }
 
-    // ── Submit to clearinghouse ───────────────────────────────────────────
-    const submission = await ediService.submitToClearinghouse(
-      ediContent,
-      auth.payer.payerId
-    );
+    // ── Route to the practice's connected clearinghouse ───────────────────
+    const routing = await getRoutingForPayer(practiceId, auth.payerId);
 
-    if (submission.status === "rejected") {
-      throw new Error(
-        `Clearinghouse rejected 278 submission: ${submission.errors.join(", ")}`
+    if (!routing || !routing.accountKey) {
+      // No clearinghouse connected for this payer — falls back to manual.
+      await db
+        .update(authorizations)
+        .set({ status: "pending", updatedAt: new Date() })
+        .where(eq(authorizations.id, authorizationId));
+      await db.insert(authorizationHistory).values({
+        authorizationId,
+        action: "manual_submission_required",
+        fromStatus: "submitted",
+        toStatus: "pending",
+        notes:
+          `No connected clearinghouse can reach ${auth.payer.name}. ` +
+          `Connect a clearinghouse in Settings and import this payer, or submit manually.`,
+        performedBy: "system",
+      });
+      return;
+    }
+
+    if (!routing.supports278) {
+      await db
+        .update(authorizations)
+        .set({ status: "pending", updatedAt: new Date() })
+        .where(eq(authorizations.id, authorizationId));
+      await db.insert(authorizationHistory).values({
+        authorizationId,
+        action: "manual_submission_required",
+        fromStatus: "submitted",
+        toStatus: "pending",
+        notes:
+          `${auth.payer.name} is not marked 278-capable via ${routing.clearinghouseKey}. ` +
+          `Update the payer's 278 setting or submit manually.`,
+        performedBy: "system",
+      });
+      return;
+    }
+
+    // ── Submit through the clearinghouse adapter ──────────────────────────
+    let submissionId: string | null = null;
+    let submissionMessages: string[] = [];
+
+    if (routing.clearinghouseKey === "claim_md") {
+      const result = await claimmd.uploadEdi(
+        routing.accountKey,
+        ediContent,
+        `278_${authorizationId}.txt`
       );
+      submissionId = result.submissionId;
+      submissionMessages = result.messages;
+    } else {
+      throw new Error(`No adapter implemented for clearinghouse ${routing.clearinghouseKey}`);
     }
 
     console.log(
-      `[pa-submit] 278 submission accepted by clearinghouse. Submission ID: ${submission.submissionId}`
+      `[pa-submit] 278 submitted via ${routing.clearinghouseKey}. Submission ID: ${submissionId ?? "n/a"}`
     );
 
     // ── Update authorization status ───────────────────────────────────────
@@ -114,7 +160,11 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
 
     // ── Record in authorization history ───────────────────────────────────
     const historyNotes = [
-      `X12 278 EDI submitted to clearinghouse. Submission ID: ${submission.submissionId}`,
+      `X12 278 submitted via ${routing.clearinghouseKey}` +
+        (submissionId ? ` (submission ${submissionId})` : ""),
+      submissionMessages.length > 0
+        ? `Clearinghouse messages: ${submissionMessages.join(" | ")}`
+        : null,
       assemblyWarnings.length > 0
         ? `Assembly warnings: ${assemblyWarnings.join(" | ")}`
         : null,
