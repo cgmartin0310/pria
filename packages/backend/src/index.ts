@@ -1,9 +1,19 @@
 import { buildApp } from "./app.js";
 import { config } from "./config.js";
 import { closeQueues } from "./jobs/queue.js";
+import { ensureBaselineData } from "./db/bootstrap.js";
 
 async function main() {
   const app = await buildApp();
+
+  // Ensure baseline reference data (clearinghouses) exists — idempotent, and
+  // tolerant of a not-yet-migrated DB so it never blocks startup.
+  try {
+    await ensureBaselineData();
+    console.log("[bootstrap] baseline data ensured");
+  } catch (err) {
+    console.warn("[bootstrap] ensureBaselineData skipped:", err instanceof Error ? err.message : err);
+  }
 
   // Start workers (import registers them) — gracefully skip if Redis unavailable
   if (config.server.nodeEnv !== "test" && config.redis.url) {
