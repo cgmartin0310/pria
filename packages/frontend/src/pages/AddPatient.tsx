@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, X, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
@@ -251,6 +251,24 @@ export default function AddPatient() {
         ? prev.diagnosisCodes.filter((c) => c !== code)
         : [...prev.diagnosisCodes, code],
     }));
+
+  // Custom (free-text) ICD-10 entry — for codes not in the built-in list.
+  const normalizedDiag = diagSearch.trim().toUpperCase();
+  const isKnownCode = normalizedDiag in COMMON_ICD10_CODES;
+  // Loose ICD-10-CM shape: a letter, then digits, optional "." + more chars.
+  const looksLikeIcd = /^[A-TV-Z][0-9][0-9A-Z]?(\.[0-9A-Z]{1,4})?$/.test(normalizedDiag);
+  const canAddCustom =
+    !!normalizedDiag &&
+    !isKnownCode &&
+    !form.diagnosisCodes.includes(normalizedDiag);
+
+  const addCustomDiag = () => {
+    if (!normalizedDiag || form.diagnosisCodes.includes(normalizedDiag)) return;
+    toggleDiag(normalizedDiag);
+    setDiagSearch("");
+  };
+
+  const icdLabel = (code: string) => COMMON_ICD10_CODES[code];
 
   // ── Validation ──
 
@@ -588,8 +606,14 @@ export default function AddPatient() {
                     className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800"
                   >
                     <span className="font-mono">{code}</span>
-                    <span className="text-blue-500">—</span>
-                    <span>{COMMON_ICD10_CODES[code]}</span>
+                    {icdLabel(code) ? (
+                      <>
+                        <span className="text-blue-500">—</span>
+                        <span>{icdLabel(code)}</span>
+                      </>
+                    ) : (
+                      <span className="text-blue-400 italic">custom</span>
+                    )}
                     <button
                       type="button"
                       onClick={() => toggleDiag(code)}
@@ -609,10 +633,32 @@ export default function AddPatient() {
               onChange={(e) => setDiagSearch(e.target.value)}
             />
 
+            {/* Add a custom code not in the built-in list */}
+            {canAddCustom && (
+              <button
+                type="button"
+                onClick={addCustomDiag}
+                className="flex w-full items-center gap-2 rounded-md border border-dashed border-blue-300 bg-blue-50/50 px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
+              >
+                <Plus className="h-4 w-4 flex-shrink-0" />
+                <span>
+                  Add custom code{" "}
+                  <span className="font-mono font-semibold">{normalizedDiag}</span>
+                  {!looksLikeIcd && (
+                    <span className="ml-1 text-xs text-amber-600">
+                      (doesn't look like a standard ICD-10 code — double-check)
+                    </span>
+                  )}
+                </span>
+              </button>
+            )}
+
             {/* Code list */}
             <div className="max-h-60 overflow-y-auto rounded-md border border-slate-200">
               {icdEntries.length === 0 ? (
-                <p className="p-3 text-sm text-slate-400">No matching codes</p>
+                <p className="p-3 text-sm text-slate-400">
+                  No matching built-in codes{normalizedDiag ? " — use “Add custom code” above" : ""}
+                </p>
               ) : (
                 icdEntries.map(([code, desc]) => {
                   const selected = form.diagnosisCodes.includes(code);

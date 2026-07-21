@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, gte, lt } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lt, isNotNull } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import * as ediService from "./edi.service.js";
 import * as aiService from "./ai.service.js";
@@ -195,7 +195,7 @@ export async function getDashboardStats(practiceId: string) {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const [pending, approvedMonth, deniedMonth, expiringSoon] = await Promise.all(
+  const [pending, approvedMonth, deniedMonth, expiringSoon, avgDecision] = await Promise.all(
     [
       db
         .select({ count: sql<number>`count(*)` })
@@ -237,6 +237,19 @@ export async function getDashboardStats(practiceId: string) {
             lt(authorizations.expiresAt, twoWeeksFromNow)
           )
         ),
+      // Average days from submission to decision, over auths that have both dates.
+      db
+        .select({
+          avgDays: sql<number | null>`avg(extract(epoch from (${authorizations.decidedAt} - ${authorizations.submittedAt})) / 86400)`,
+        })
+        .from(authorizations)
+        .where(
+          and(
+            eq(authorizations.practiceId, practiceId),
+            isNotNull(authorizations.decidedAt),
+            isNotNull(authorizations.submittedAt)
+          )
+        ),
     ]
   );
 
@@ -245,13 +258,17 @@ export async function getDashboardStats(practiceId: string) {
   const deniedCount = Number(deniedMonth[0]?.count ?? 0);
   const total = approvedCount + deniedCount;
 
+  const avgDaysRaw = avgDecision[0]?.avgDays;
+  const avgDecisionDays =
+    avgDaysRaw != null ? Math.round(Number(avgDaysRaw) * 10) / 10 : 0;
+
   return {
     pendingCount,
     approvedThisMonth: approvedCount,
     deniedThisMonth: deniedCount,
     expiringSoon: Number(expiringSoon[0]?.count ?? 0),
     approvalRate: total > 0 ? Math.round((approvedCount / total) * 100) : 0,
-    avgDecisionDays: 4.2, // Stub: would calculate from history
+    avgDecisionDays,
   };
 }
 

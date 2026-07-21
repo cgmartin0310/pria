@@ -9,13 +9,13 @@ import {
 import { Card, CardContent } from "@/components/ui/card.js";
 import type { DashboardStats } from "@pria/shared";
 
-const MOCK_STATS: DashboardStats = {
-  pendingCount: 14,
-  approvedThisMonth: 47,
-  deniedThisMonth: 8,
-  expiringSoon: 6,
-  approvalRate: 85,
-  avgDecisionDays: 4.2,
+const EMPTY_STATS: DashboardStats = {
+  pendingCount: 0,
+  approvedThisMonth: 0,
+  deniedThisMonth: 0,
+  expiringSoon: 0,
+  approvalRate: 0,
+  avgDecisionDays: 0,
 };
 
 interface StatCardProps {
@@ -70,7 +70,7 @@ interface DashboardOverviewProps {
   stats?: DashboardStats;
 }
 
-export function DashboardOverview({ stats = MOCK_STATS }: DashboardOverviewProps) {
+export function DashboardOverview({ stats = EMPTY_STATS }: DashboardOverviewProps) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <div className="xl:col-span-1">
@@ -89,7 +89,6 @@ export function DashboardOverview({ stats = MOCK_STATS }: DashboardOverviewProps
           subtitle="This calendar month"
           icon={CheckCircle2}
           iconClass="text-green-600 bg-green-50"
-          trend={{ value: "+12% vs last month", positive: true }}
         />
       </div>
       <div className="xl:col-span-1">
@@ -117,13 +116,12 @@ export function DashboardOverview({ stats = MOCK_STATS }: DashboardOverviewProps
           subtitle="Last 90 days"
           icon={TrendingUp}
           iconClass="text-blue-600 bg-blue-50"
-          trend={{ value: "+3% vs prior period", positive: true }}
         />
       </div>
       <div className="xl:col-span-1">
         <StatCard
           title="Avg Decision"
-          value={`${stats.avgDecisionDays}d`}
+          value={stats.avgDecisionDays > 0 ? `${stats.avgDecisionDays}d` : "—"}
           subtitle="Average calendar days"
           icon={Calendar}
           iconClass="text-purple-600 bg-purple-50"

@@ -10,6 +10,13 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils.js";
+import { useAuth } from "@/hooks/useAuth.js";
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Practice Admin",
+  therapist: "Therapist",
+  billing: "Billing",
+};
 
 interface NavItem {
   label: string;
@@ -28,6 +35,10 @@ const navItems: NavItem[] = [
 ];
 
 export function Sidebar() {
+  const { user } = useAuth();
+  const practiceName = user?.practice?.name ?? "Your Practice";
+  const roleLabel = user?.role ? ROLE_LABELS[user.role] ?? user.role : "";
+
   return (
     <aside className="flex h-full w-64 flex-col border-r border-slate-200 bg-white">
       {/* Logo */}
@@ -76,9 +87,9 @@ export function Sidebar() {
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-slate-900">
-              Apex Therapy Group
+              {practiceName}
             </p>
-            <p className="truncate text-xs text-slate-500">Practice Admin</p>
+            <p className="truncate text-xs text-slate-500">{roleLabel}</p>
           </div>
         </div>
       </div>
