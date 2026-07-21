@@ -158,6 +158,18 @@ export const authApi = {
   me: () => api.get<ApiResponse<CurrentUser>>("/auth/me"),
 };
 
+export interface Icd10Result {
+  code: string;
+  name: string;
+}
+
+export const icd10Api = {
+  search: (q: string, limit = 25) =>
+    api.get<ApiResponse<Icd10Result[]>>(
+      `/icd10/search?q=${encodeURIComponent(q)}&limit=${limit}`
+    ),
+};
+
 export const teamApi = {
   list: () => api.get<ApiResponse<TeamMember[]>>("/practices/current/team"),
   invite: (data: { email: string; name?: string; role?: string }) =>

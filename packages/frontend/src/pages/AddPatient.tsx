@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { RELATIONSHIP_CODES, COMMON_ICD10_CODES, US_STATES } from "@pria/shared";
-import { patientsApi, payersApi } from "@/lib/api.js";
+import { patientsApi, payersApi, icd10Api, type Icd10Result } from "@/lib/api.js";
 import type { Payer } from "@pria/shared";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -238,28 +238,66 @@ export default function AddPatient() {
 
   // ── Diagnosis codes ──
 
-  const icdEntries = Object.entries(COMMON_ICD10_CODES).filter(([code, desc]) => {
-    if (!diagSearch) return true;
-    const q = diagSearch.toLowerCase();
-    return code.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
-  });
+  // Labels learned from the built-in list + live NIH results, so selected
+  // badges (including codes found only via search) can show a description.
+  const [diagLabels, setDiagLabels] = useState<Record<string, string>>({});
+  const [apiResults, setApiResults] = useState<Icd10Result[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
 
-  const toggleDiag = (code: string) =>
+  const normalizedDiag = diagSearch.trim().toUpperCase();
+
+  // Debounced live search against the NIH/NLM ICD-10 proxy (all ~70k codes).
+  useEffect(() => {
+    const q = diagSearch.trim();
+    if (q.length < 2) {
+      setApiResults([]);
+      setSearching(false);
+      setSearchError(false);
+      return;
+    }
+    setSearching(true);
+    setSearchError(false);
+    const handle = setTimeout(() => {
+      icd10Api
+        .search(q)
+        .then((res) => setApiResults(res.data ?? []))
+        .catch(() => {
+          setApiResults([]);
+          setSearchError(true);
+        })
+        .finally(() => setSearching(false));
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [diagSearch]);
+
+  const toggleDiag = (code: string, label?: string) => {
+    if (label) setDiagLabels((prev) => ({ ...prev, [code]: label }));
     setForm((prev) => ({
       ...prev,
       diagnosisCodes: prev.diagnosisCodes.includes(code)
         ? prev.diagnosisCodes.filter((c) => c !== code)
         : [...prev.diagnosisCodes, code],
     }));
+  };
 
-  // Custom (free-text) ICD-10 entry — for codes not in the built-in list.
-  const normalizedDiag = diagSearch.trim().toUpperCase();
-  const isKnownCode = normalizedDiag in COMMON_ICD10_CODES;
+  const icdLabel = (code: string): string | undefined =>
+    diagLabels[code] ?? COMMON_ICD10_CODES[code];
+
+  // Which rows to show: live results while searching, else built-in quick picks.
+  const displayEntries: Array<{ code: string; name: string }> =
+    diagSearch.trim().length >= 2
+      ? apiResults
+      : Object.entries(COMMON_ICD10_CODES).map(([code, name]) => ({ code, name }));
+
   // Loose ICD-10-CM shape: a letter, then digits, optional "." + more chars.
   const looksLikeIcd = /^[A-TV-Z][0-9][0-9A-Z]?(\.[0-9A-Z]{1,4})?$/.test(normalizedDiag);
+  const hasExactMatch =
+    normalizedDiag in COMMON_ICD10_CODES ||
+    apiResults.some((r) => r.code.toUpperCase() === normalizedDiag);
   const canAddCustom =
     !!normalizedDiag &&
-    !isKnownCode &&
+    !hasExactMatch &&
     !form.diagnosisCodes.includes(normalizedDiag);
 
   const addCustomDiag = () => {
@@ -267,8 +305,6 @@ export default function AddPatient() {
     toggleDiag(normalizedDiag);
     setDiagSearch("");
   };
-
-  const icdLabel = (code: string) => COMMON_ICD10_CODES[code];
 
   // ── Validation ──
 
@@ -628,10 +664,22 @@ export default function AddPatient() {
 
             {/* Search */}
             <Input
-              placeholder="Search by code or description..."
+              placeholder="Search all ICD-10 codes by code or description..."
               value={diagSearch}
               onChange={(e) => setDiagSearch(e.target.value)}
             />
+            {diagSearch.trim().length < 2 && (
+              <p className="text-xs text-slate-400">
+                Showing common therapy codes. Type at least 2 characters to search
+                the full ICD-10 code set.
+              </p>
+            )}
+            {searchError && (
+              <p className="text-xs text-amber-600">
+                Couldn't reach the code search service — you can still add a code
+                manually below.
+              </p>
+            )}
 
             {/* Add a custom code not in the built-in list */}
             {canAddCustom && (
@@ -655,18 +703,20 @@ export default function AddPatient() {
 
             {/* Code list */}
             <div className="max-h-60 overflow-y-auto rounded-md border border-slate-200">
-              {icdEntries.length === 0 ? (
+              {searching ? (
+                <p className="p-3 text-sm text-slate-400">Searching…</p>
+              ) : displayEntries.length === 0 ? (
                 <p className="p-3 text-sm text-slate-400">
-                  No matching built-in codes{normalizedDiag ? " — use “Add custom code” above" : ""}
+                  No matching codes{normalizedDiag ? " — use “Add custom code” above" : ""}
                 </p>
               ) : (
-                icdEntries.map(([code, desc]) => {
+                displayEntries.map(({ code, name }) => {
                   const selected = form.diagnosisCodes.includes(code);
                   return (
                     <button
                       key={code}
                       type="button"
-                      onClick={() => toggleDiag(code)}
+                      onClick={() => toggleDiag(code, name)}
                       className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors ${
                         selected
                           ? "bg-blue-50 text-blue-800"
@@ -681,7 +731,7 @@ export default function AddPatient() {
                         )}
                       </span>
                       <span className="font-mono font-medium text-xs w-16 flex-shrink-0">{code}</span>
-                      <span className="text-slate-600">{desc}</span>
+                      <span className="text-slate-600">{name}</span>
                     </button>
                   );
                 })
