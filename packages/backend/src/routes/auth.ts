@@ -1,26 +1,37 @@
 import type { FastifyInstance } from "fastify";
+import { eq } from "drizzle-orm";
+import { db, schema } from "../db/index.js";
 
 /**
- * Auth routes — Clerk integration stubs.
- * Production: implement Clerk JWT verification middleware.
+ * Auth routes.
+ * The tenant-auth hook (see auth/tenant.ts) has already verified the Clerk JWT
+ * and resolved req.auth before these handlers run.
  */
 export async function authRoutes(app: FastifyInstance) {
-  // Stub: Returns current user info (would verify Clerk JWT in production)
+  // Returns the current authenticated user + their practice context.
   app.get("/auth/me", async (req, reply) => {
-    // In production: verify JWT from Authorization header, look up user in DB
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.id, req.auth.userId),
+      with: { practice: true },
+    });
+
+    if (!user) {
+      return reply.status(404).send({
+        error: "NOT_FOUND",
+        message: "User not found",
+        statusCode: 404,
+      });
+    }
+
     return reply.send({
       data: {
-        id: "user_stub_001",
-        practiceId: "practice_stub_001",
-        email: "demo@pria.health",
-        name: "Demo User",
-        role: "admin",
+        id: user.id,
+        practiceId: user.practiceId,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        practice: user.practice ?? null,
       },
     });
-  });
-
-  // Stub: Session refresh
-  app.post("/auth/refresh", async (req, reply) => {
-    return reply.send({ data: { refreshed: true } });
   });
 }

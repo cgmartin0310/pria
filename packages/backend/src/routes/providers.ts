@@ -4,8 +4,6 @@ import { eq, and, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { DISCIPLINE_TAXONOMY_DEFAULTS } from "@pria/shared";
 
-const STUB_PRACTICE_ID = "practice_stub_001";
-
 const createProviderSchema = z.object({
   npi: z.string().min(10).max(10).regex(/^\d{10}$/, "NPI must be exactly 10 digits"),
   firstName: z.string().min(1).max(100),
@@ -30,7 +28,7 @@ export async function providerRoutes(app: FastifyInstance) {
     const activeOnly = query["active"] !== "false";
 
     const conditions: ReturnType<typeof eq>[] = [
-      eq(schema.providers.practiceId, STUB_PRACTICE_ID),
+      eq(schema.providers.practiceId, req.auth.practiceId),
     ];
 
     if (activeOnly) {
@@ -70,7 +68,7 @@ export async function providerRoutes(app: FastifyInstance) {
     const provider = await db.query.providers.findFirst({
       where: and(
         eq(schema.providers.id, id),
-        eq(schema.providers.practiceId, STUB_PRACTICE_ID)
+        eq(schema.providers.practiceId, req.auth.practiceId)
       ),
     });
 
@@ -108,7 +106,7 @@ export async function providerRoutes(app: FastifyInstance) {
     const [provider] = await db
       .insert(schema.providers)
       .values({
-        practiceId: STUB_PRACTICE_ID,
+        practiceId: req.auth.practiceId,
         npi: data.npi,
         firstName: data.firstName,
         lastName: data.lastName,
@@ -158,7 +156,7 @@ export async function providerRoutes(app: FastifyInstance) {
       .where(
         and(
           eq(schema.providers.id, id),
-          eq(schema.providers.practiceId, STUB_PRACTICE_ID)
+          eq(schema.providers.practiceId, req.auth.practiceId)
         )
       )
       .returning();

@@ -25,7 +25,7 @@ Pria automates the prior authorization workflow for physical therapy, occupation
 | Queue | Redis, BullMQ |
 | AI | Anthropic Claude API |
 | EDI | X12 278 (clearinghouse integration) |
-| Auth | Clerk (planned) |
+| Auth | Clerk (JWT verification + per-practice multi-tenancy) |
 | Monorepo | pnpm workspaces, Turborepo |
 
 ## Project Structure
@@ -84,7 +84,8 @@ See `.env.example` for all required variables. Key ones:
 | `DATABASE_URL` | PostgreSQL connection string |
 | `REDIS_URL` | Redis connection string |
 | `ANTHROPIC_API_KEY` | Claude API key for AI features |
-| `CLERK_SECRET_KEY` | Clerk auth secret (when implemented) |
+| `CLERK_SECRET_KEY` | Clerk backend secret — verifies session JWTs on the API |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk frontend key — required for the React app to boot |
 | `AVAILITY_API_KEY` | Clearinghouse API credentials |
 
 ## Architecture

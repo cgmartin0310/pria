@@ -3,8 +3,6 @@ import { z } from "zod";
 import { eq, and, like, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 
-const STUB_PRACTICE_ID = "practice_stub_001";
-
 const addressSchema = z.object({
   street: z.string().min(1),
   city: z.string().min(1),
@@ -50,7 +48,7 @@ export async function patientRoutes(app: FastifyInstance) {
     const page = parseInt(query["page"] ?? "1");
     const pageSize = parseInt(query["pageSize"] ?? "20");
 
-    const conditions = [eq(schema.patients.practiceId, STUB_PRACTICE_ID)];
+    const conditions = [eq(schema.patients.practiceId, req.auth.practiceId)];
     if (payerId) conditions.push(eq(schema.patients.payerId, payerId));
 
     const [items, countResult] = await Promise.all([
@@ -81,7 +79,7 @@ export async function patientRoutes(app: FastifyInstance) {
     const patient = await db.query.patients.findFirst({
       where: and(
         eq(schema.patients.id, id),
-        eq(schema.patients.practiceId, STUB_PRACTICE_ID)
+        eq(schema.patients.practiceId, req.auth.practiceId)
       ),
       with: {
         payer: true,
@@ -118,7 +116,7 @@ export async function patientRoutes(app: FastifyInstance) {
     const [patient] = await db
       .insert(schema.patients)
       .values({
-        practiceId: STUB_PRACTICE_ID,
+        practiceId: req.auth.practiceId,
         ...parsed.data,
       })
       .returning();
@@ -144,7 +142,7 @@ export async function patientRoutes(app: FastifyInstance) {
       .where(
         and(
           eq(schema.patients.id, id),
-          eq(schema.patients.practiceId, STUB_PRACTICE_ID)
+          eq(schema.patients.practiceId, req.auth.practiceId)
         )
       )
       .returning();

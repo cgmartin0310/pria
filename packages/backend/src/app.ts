@@ -8,6 +8,7 @@ import { patientRoutes } from "./routes/patients.js";
 import { payerRoutes } from "./routes/payers.js";
 import { providerRoutes } from "./routes/providers.js";
 import { practiceRoutes } from "./routes/practices.js";
+import { tenantAuthPlugin } from "./auth/tenant.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -47,6 +48,12 @@ export async function buildApp() {
 
   await app.register(
     async (api) => {
+      // Tenant-auth: verifies Clerk JWT and populates req.auth for every
+      // route registered in this scope. Applied directly (not via register) so
+      // the onRequest hook covers the sibling routes below rather than being
+      // encapsulated. Public routes (/health) live outside this scope.
+      await tenantAuthPlugin(api);
+
       await api.register(authRoutes);
       await api.register(authorizationRoutes);
       await api.register(patientRoutes);

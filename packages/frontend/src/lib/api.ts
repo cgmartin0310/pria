@@ -1,6 +1,19 @@
 const API_BASE = import.meta.env["VITE_API_URL"] ?? "";
 const API_PREFIX = `${API_BASE}/api/v1`;
 
+// ─── Auth token injection ─────────────────────────────────────────────────────
+// The fetch wrapper is a plain module, so Clerk's session token is supplied via
+// a getter registered at app init (see ApiAuthBridge in main.tsx). This keeps
+// api.ts decoupled from React/Clerk while every request carries a bearer token.
+
+type TokenGetter = () => Promise<string | null>;
+
+let getToken: TokenGetter | null = null;
+
+export function setAuthTokenGetter(fn: TokenGetter | null): void {
+  getToken = fn;
+}
+
 class ApiError extends Error {
   constructor(
     public statusCode: number,
@@ -18,11 +31,13 @@ async function request<T>(
   body?: unknown
 ): Promise<T> {
   const url = `${API_PREFIX}${path}`;
+  const token = getToken ? await getToken() : null;
   const response = await fetch(url, {
     method,
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     credentials: "include",
     body: body ? JSON.stringify(body) : undefined,
@@ -119,4 +134,32 @@ export const practiceApi = {
     api.patch<ApiResponse<Practice>>("/practices/current", data),
   updateClinicConfig: (data: unknown) =>
     api.patch<ApiResponse<Practice>>("/practices/current/clinic-config", data),
+};
+
+export interface CurrentUser {
+  id: string;
+  practiceId: string;
+  email: string;
+  name: string;
+  role: "admin" | "therapist" | "billing";
+  practice: Practice | null;
+}
+
+export interface TeamMember {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin" | "therapist" | "billing";
+  status: "active" | "invited";
+  createdAt?: string;
+}
+
+export const authApi = {
+  me: () => api.get<ApiResponse<CurrentUser>>("/auth/me"),
+};
+
+export const teamApi = {
+  list: () => api.get<ApiResponse<TeamMember[]>>("/practices/current/team"),
+  invite: (data: { email: string; name?: string; role?: string }) =>
+    api.post<ApiResponse<TeamMember>>("/practices/current/invites", data),
 };

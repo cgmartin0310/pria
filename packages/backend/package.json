@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
+    "@clerk/backend": "^1.21.0",
     "@pria/shared": "workspace:*",
     "bullmq": "^5.14.0",
     "dotenv": "^16.4.7",

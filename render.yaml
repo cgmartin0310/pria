@@ -11,7 +11,14 @@ services:
       pnpm --filter @pria/shared build &&
       pnpm --filter @pria/backend build
     startCommand: node packages/backend/dist/index.js
+    # Runs once per deploy, after build and before the new version takes traffic.
+    # Applies any pending Drizzle migrations. Compiled to dist by the build step;
+    # the migrate script resolves ./drizzle relative to itself, so CWD (repo root)
+    # doesn't matter. Requires DATABASE_URL, which is present in the service env.
+    preDeployCommand: node packages/backend/dist/db/migrate.js
     envVars:
+      - key: NODE_VERSION
+        value: "20"
       - key: NODE_ENV
         value: production
       - key: PORT
@@ -51,8 +58,15 @@ services:
         source: /*
         destination: /index.html
     envVars:
+      - key: NODE_VERSION
+        value: "20"
       - key: VITE_API_URL
         value: https://pria-api.onrender.com
+      # Clerk publishable key — inlined into the bundle at BUILD time by Vite.
+      # Set the value in the Render dashboard (Environment). Must be the key from
+      # the SAME Clerk instance whose secret key is set on pria-api.
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
     headers:
       - path: /*
         name: X-Frame-Options

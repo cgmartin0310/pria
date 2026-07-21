@@ -10,6 +10,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.22.0",
     "@pria/shared": "workspace:*",
     "clsx": "^2.1.1",
     "lucide-react": "^0.474.0",

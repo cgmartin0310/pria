@@ -2,8 +2,6 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import * as paService from "../services/pa.service.js";
 
-const STUB_PRACTICE_ID = "practice_stub_001";
-
 const createAuthSchema = z.object({
   patientId: z.string(),
   payerId: z.string(),
@@ -19,7 +17,7 @@ export async function authorizationRoutes(app: FastifyInstance) {
   // List authorizations
   app.get("/authorizations", async (req, reply) => {
     const query = req.query as Record<string, string>;
-    const result = await paService.listAuthorizations(STUB_PRACTICE_ID, {
+    const result = await paService.listAuthorizations(req.auth.practiceId, {
       status: query["status"] as typeof result extends { status: infer S } ? S : never,
       patientId: query["patientId"],
       payerId: query["payerId"],
@@ -31,14 +29,14 @@ export async function authorizationRoutes(app: FastifyInstance) {
 
   // Get dashboard stats
   app.get("/authorizations/stats", async (req, reply) => {
-    const stats = await paService.getDashboardStats(STUB_PRACTICE_ID);
+    const stats = await paService.getDashboardStats(req.auth.practiceId);
     return reply.send({ data: stats });
   });
 
   // Get single authorization
   app.get("/authorizations/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const auth = await paService.getAuthorizationById(id, STUB_PRACTICE_ID);
+    const auth = await paService.getAuthorizationById(id, req.auth.practiceId);
     if (!auth) {
       return reply.status(404).send({
         error: "NOT_FOUND",
@@ -62,7 +60,7 @@ export async function authorizationRoutes(app: FastifyInstance) {
     }
 
     const auth = await paService.createAuthorization(
-      STUB_PRACTICE_ID,
+      req.auth.practiceId,
       parsed.data
     );
     return reply.status(201).send({ data: auth });
@@ -72,7 +70,7 @@ export async function authorizationRoutes(app: FastifyInstance) {
   app.post("/authorizations/:id/submit", async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
-      const auth = await paService.submitAuthorization(id, STUB_PRACTICE_ID);
+      const auth = await paService.submitAuthorization(id, req.auth.practiceId);
       return reply.send({ data: auth });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Submission failed";
@@ -90,7 +88,7 @@ export async function authorizationRoutes(app: FastifyInstance) {
     try {
       const result = await paService.generateClinicalSummaryForAuth(
         id,
-        STUB_PRACTICE_ID
+        req.auth.practiceId
       );
       return reply.send({ data: result });
     } catch (err) {

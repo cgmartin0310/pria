@@ -1,37 +1,57 @@
 /**
- * useAuth hook — Clerk integration stub.
+ * useAuth — app-level auth hook.
  *
- * Production: Replace with @clerk/clerk-react hooks.
- * The stub returns a mock authenticated user for development.
+ * Combines Clerk's session state (identity, sign-out) with PRIA's own user
+ * profile from GET /auth/me (practiceId, role, practice). The backend resolves
+ * or provisions the PRIA user on first authenticated request, so the profile
+ * becomes available shortly after Clerk reports the user as signed in.
  */
+import { useEffect, useState } from "react";
+import { useAuth as useClerkAuth, useUser } from "@clerk/clerk-react";
+import { authApi, type CurrentUser } from "@/lib/api.js";
 
-export interface AuthUser {
-  id: string;
-  practiceId: string;
-  email: string;
-  name: string;
-  role: "admin" | "therapist" | "billing";
-}
+export type AuthUser = CurrentUser;
 
 export function useAuth() {
-  // Stub: returns a mock authenticated session
-  const user: AuthUser = {
-    id: "user_stub_001",
-    practiceId: "practice_stub_001",
-    email: "demo@pria.health",
-    name: "Dr. Sarah Chen",
-    role: "admin",
-  };
+  const { isLoaded, isSignedIn, signOut } = useClerkAuth();
+  const { user: clerkUser } = useUser();
+
+  const [profile, setProfile] = useState<AuthUser | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!isLoaded || !isSignedIn) {
+      setProfile(null);
+      return;
+    }
+
+    setProfileLoading(true);
+    authApi
+      .me()
+      .then((res) => {
+        if (!cancelled) setProfile(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setProfile(null);
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // Re-fetch when the Clerk user id changes (sign-in/out/switch).
+  }, [isLoaded, isSignedIn, clerkUser?.id]);
 
   return {
-    user,
-    isLoaded: true,
-    isSignedIn: true,
-    signIn: async () => {
-      console.log("[useAuth] Sign in — replace with Clerk");
-    },
-    signOut: async () => {
-      console.log("[useAuth] Sign out — replace with Clerk");
-    },
+    /** PRIA profile: practiceId, role, practice. Null until /auth/me resolves. */
+    user: profile,
+    isLoaded,
+    isSignedIn: !!isSignedIn,
+    profileLoading,
+    signOut: () => signOut(),
   };
 }

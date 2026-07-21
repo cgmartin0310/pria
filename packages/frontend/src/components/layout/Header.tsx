@@ -1,4 +1,5 @@
-import { Bell, Search, User } from "lucide-react";
+import { Bell, Search } from "lucide-react";
+import { UserButton } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { useAuth } from "@/hooks/useAuth.js";
@@ -36,15 +37,13 @@ export function Header({ title }: HeaderProps) {
           <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
         </Button>
 
-        {/* User avatar */}
+        {/* User avatar + account menu (sign-out lives here) */}
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
-            <User className="h-4 w-4 text-blue-600" />
-          </div>
-          <div className="hidden md:block">
+          <div className="hidden text-right md:block">
             <p className="text-sm font-medium text-slate-900">{user?.name}</p>
             <p className="text-xs text-slate-500">{user?.email}</p>
           </div>
+          <UserButton afterSignOutUrl="/sign-in" />
         </div>
       </div>
     </header>
