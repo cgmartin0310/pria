@@ -295,7 +295,11 @@ export default function AddPatient() {
   const hasExactMatch =
     normalizedDiag in COMMON_ICD10_CODES ||
     apiResults.some((r) => r.code.toUpperCase() === normalizedDiag);
+  // Manual entry is only a fallback for when the live search is unreachable —
+  // otherwise the full ICD-10 search covers everything. Gating on searchError
+  // also avoids the button flickering in while a normal search is in flight.
   const canAddCustom =
+    searchError &&
     !!normalizedDiag &&
     !hasExactMatch &&
     !form.diagnosisCodes.includes(normalizedDiag);
@@ -681,7 +685,7 @@ export default function AddPatient() {
               </p>
             )}
 
-            {/* Add a custom code not in the built-in list */}
+            {/* Fallback: manual entry only when the live search is unreachable */}
             {canAddCustom && (
               <button
                 type="button"
