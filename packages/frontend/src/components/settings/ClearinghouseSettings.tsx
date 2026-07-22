@@ -48,6 +48,28 @@ function AddPayer({
   const [adding, setAdding] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [showManual, setShowManual] = useState(!supportsSearch);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    setSearchError(null);
+    try {
+      const res = await clearinghouseApi.syncDirectory(connectionId);
+      setSyncResult(
+        `Synced ${res.data.synced.toLocaleString()} payers` +
+          (res.data.truncated ? " (list truncated — re-run to continue)" : "")
+      );
+      onChanged();
+    } catch (e) {
+      setSearchError(
+        (e as { message?: string })?.message ?? "Directory sync failed"
+      );
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     if (!supportsSearch) return;
@@ -121,6 +143,28 @@ function AddPayer({
           &amp; authorization forms.
         </p>
       </div>
+
+      {/* Directory sync — search needs the full list locally */}
+      {supportsSearch && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <p className="text-xs text-slate-600">
+            Availity has no name search, so the full payer directory is synced
+            locally. Run this once (takes up to a minute).
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!isAdmin || syncing}
+            onClick={handleSync}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing…" : "Sync directory"}
+          </Button>
+        </div>
+      )}
+      {syncResult && (
+        <p className="text-xs text-green-700">{syncResult}</p>
+      )}
 
       {/* Directory search */}
       {supportsSearch && (

@@ -133,6 +133,21 @@ export async function clearinghouseRoutes(app: FastifyInstance) {
     }
   );
 
+  // Sync the clearinghouse's full payer directory (admin) — needed before search
+  app.post(
+    "/clearinghouses/connections/:id/sync-directory",
+    { preHandler: requireRole("admin") },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      try {
+        const data = await chService.syncPayerDirectory(req.auth.practiceId, id);
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    }
+  );
+
   // Diagnostic: does this connection actually have Service Reviews (278) access?
   app.post(
     "/clearinghouses/connections/:id/test-service-review",

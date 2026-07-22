@@ -14,8 +14,13 @@ export interface ConnectCredentials {
   simulatedDecision?: "A1" | "A3" | "A4";
 }
 
-const { clearinghouses, practiceClearinghouses, clearinghousePayers, payers } =
-  schema;
+const {
+  clearinghouses,
+  practiceClearinghouses,
+  clearinghousePayers,
+  clearinghousePayerDirectory,
+  payers,
+} = schema;
 
 // ─── Networks ──────────────────────────────────────────────────────────────────
 
@@ -182,7 +187,95 @@ async function getConnection(practiceId: string, connectionId: string) {
   return conn;
 }
 
-/** Search the connected clearinghouse's live payer directory (not persisted). */
+/**
+ * Pull the clearinghouse's ENTIRE payer directory into our cache.
+ *
+ * Availity pages at 50 per request and offers no name search, so a usable
+ * search requires the whole list locally. Rate limit is 5 calls/sec, so pages
+ * are spaced out; this is a deliberate, occasional admin action.
+ */
+export async function syncPayerDirectory(
+  practiceId: string,
+  connectionId: string
+): Promise<{ synced: number; pages: number; truncated: boolean }> {
+  const conn = await getConnection(practiceId, connectionId);
+  const creds = conn.credentials ?? {};
+
+  if (conn.clearinghouse.key !== "availity") {
+    throw new ClearinghouseError(
+      400,
+      "Directory sync is only available for Availity connections"
+    );
+  }
+  if (!creds.clientId || !creds.clientSecret) {
+    throw new ClearinghouseError(400, "Connection has no Availity credentials");
+  }
+
+  const availityCreds = {
+    clientId: creds.clientId,
+    clientSecret: creds.clientSecret,
+    scope: creds.scope,
+    demo: creds.demo,
+    environment: creds.environment,
+  };
+
+  const PAGE = 50;
+  const MAX_PAGES = 200; // 10k payers ceiling so a runaway list can't hang us
+  const SPACING_MS = 220; // stay under Availity's 5 req/sec
+
+  let offset = 0;
+  let pages = 0;
+  let synced = 0;
+  let truncated = false;
+
+  for (; pages < MAX_PAGES; pages++) {
+    const page = await availity.fetchPayerList(availityCreds, {
+      offset,
+      limit: PAGE,
+    });
+    if (page.length === 0) break;
+
+    // Upsert the page.
+    await db
+      .insert(clearinghousePayerDirectory)
+      .values(
+        page.map((p) => ({
+          clearinghouseId: conn.clearinghouseId,
+          payerId: p.payerId,
+          name: p.payerName,
+          transactions: p.transactions,
+        }))
+      )
+      .onConflictDoUpdate({
+        target: [
+          clearinghousePayerDirectory.clearinghouseId,
+          clearinghousePayerDirectory.payerId,
+        ],
+        set: {
+          name: sql`excluded.name`,
+          transactions: sql`excluded.transactions`,
+          updatedAt: new Date(),
+        },
+      });
+
+    synced += page.length;
+    offset += PAGE;
+
+    if (page.length < PAGE) break; // last page
+    await new Promise((r) => setTimeout(r, SPACING_MS));
+  }
+
+  if (pages >= MAX_PAGES) truncated = true;
+
+  await db
+    .update(practiceClearinghouses)
+    .set({ lastSyncedAt: new Date(), updatedAt: new Date() })
+    .where(eq(practiceClearinghouses.id, connectionId));
+
+  return { synced, pages, truncated };
+}
+
+/** Search the connected clearinghouse's payer directory. */
 export async function searchPayers(
   practiceId: string,
   connectionId: string,
@@ -199,25 +292,44 @@ export async function searchPayers(
   }>;
 
   if (conn.clearinghouse.key === "availity") {
-    if (!creds.clientId || !creds.clientSecret) {
-      throw new ClearinghouseError(400, "Connection has no Availity credentials");
+    // Search the synced directory. Availity has no name-search parameter, so
+    // querying live would only ever filter the first page of thousands.
+    const like = `%${query.toLowerCase()}%`;
+    const rows = await db
+      .select({
+        payerId: clearinghousePayerDirectory.payerId,
+        name: clearinghousePayerDirectory.name,
+        transactions: clearinghousePayerDirectory.transactions,
+      })
+      .from(clearinghousePayerDirectory)
+      .where(
+        and(
+          eq(clearinghousePayerDirectory.clearinghouseId, conn.clearinghouseId),
+          sql`(lower(${clearinghousePayerDirectory.name}) like ${like} or lower(${clearinghousePayerDirectory.payerId}) like ${like})`
+        )
+      )
+      .orderBy(clearinghousePayerDirectory.name)
+      .limit(50);
+
+    if (rows.length === 0) {
+      const [{ count } = { count: 0 }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(clearinghousePayerDirectory)
+        .where(eq(clearinghousePayerDirectory.clearinghouseId, conn.clearinghouseId));
+      if (Number(count) === 0) {
+        throw new ClearinghouseError(
+          400,
+          "Payer directory hasn't been synced yet — click “Sync payer directory” first."
+        );
+      }
     }
-    const payers = await availity.fetchPayerList(
-      {
-        clientId: creds.clientId,
-        clientSecret: creds.clientSecret,
-        scope: creds.scope,
-        demo: creds.demo,
-        environment: creds.environment,
-      },
-      { q: query }
-    );
-    results = payers.map((p) => ({
-      clearinghousePayerId: p.payerId,
-      name: p.payerName,
-      // Availity's payer list doesn't expose 278 prior-auth REQUEST capability
+
+    results = rows.map((r) => ({
+      clearinghousePayerId: r.payerId,
+      name: r.name,
+      // Availity's directory doesn't expose 278 prior-auth REQUEST capability
       // (only 278I inquiry / 278N notice), so report what it does tell us.
-      capabilities: { transactions: p.transactions.join(", ") },
+      capabilities: { transactions: (r.transactions ?? []).join(", ") },
     }));
   } else if (conn.clearinghouse.key === "claim_md") {
     const accountKey = creds.accountKey;

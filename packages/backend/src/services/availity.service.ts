@@ -315,15 +315,17 @@ async function payerListAttempt(
  */
 export async function fetchPayerList(
   creds: AvailityCredentials,
-  opts?: { q?: string; transactionType?: string; limit?: number }
+  opts?: { transactionType?: string; limit?: number; offset?: number }
 ): Promise<AvailityPayer[]> {
   // Documented params: payerId, transactionType, submissionMode, availability,
   // enrollmentRequired, plus collection paging (offset/limit, limit max 50).
-  // There is no name-search param, so name filtering happens locally.
+  // NOTE: there is NO name-search parameter — searching by name requires the
+  // full directory locally (see syncPayerDirectory).
   const params = new URLSearchParams();
   if (opts?.transactionType) params.set("transactionType", opts.transactionType);
   params.set("limit", String(Math.min(opts?.limit ?? 50, 50)));
-  const query = params.toString() ? `?${params.toString()}` : "";
+  params.set("offset", String(opts?.offset ?? 0));
+  const query = `?${params.toString()}`;
 
   const primary: AvailityEnvironment =
     creds.environment ?? (creds.demo ? "test" : "production");
@@ -337,18 +339,7 @@ export async function fetchPayerList(
 
   for (const { env, path } of attempts) {
     try {
-      const payers = await payerListAttempt(creds, env, path, query);
-      const limit = opts?.limit ?? 50;
-      if (!opts?.q) return payers.slice(0, limit);
-
-      const q = opts.q.toLowerCase();
-      return payers
-        .filter(
-          (p) =>
-            p.payerName.toLowerCase().includes(q) ||
-            p.payerId.toLowerCase().includes(q)
-        )
-        .slice(0, limit);
+      return await payerListAttempt(creds, env, path, query);
     } catch (err) {
       errors.push(
         `${env}${path}: ${err instanceof Error ? err.message : "request failed"}`

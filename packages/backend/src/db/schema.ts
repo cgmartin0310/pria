@@ -595,6 +595,36 @@ export const clearinghousePayers = pgTable(
   ]
 );
 
+/**
+ * Cached copy of a clearinghouse's FULL payer directory.
+ *
+ * Availity's payer-list API has no name-search parameter — only paging — so
+ * searching by name requires having the whole list locally. We sync it once per
+ * clearinghouse and query this table instead of filtering a single page.
+ */
+export const clearinghousePayerDirectory = pgTable(
+  "clearinghouse_payer_directory",
+  {
+    id: varchar("id", { length: 26 })
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    clearinghouseId: varchar("clearinghouse_id", { length: 26 })
+      .notNull()
+      .references(() => clearinghouses.id, { onDelete: "cascade" }),
+    /** The payer's id as known by the clearinghouse. */
+    payerId: varchar("payer_id", { length: 50 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    /** transactionDescription values from the clearinghouse's routes. */
+    transactions: jsonb("transactions").$type<string[]>(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("ch_dir_ch_idx").on(t.clearinghouseId),
+    index("ch_dir_name_idx").on(t.name),
+    uniqueIndex("ch_dir_unique_idx").on(t.clearinghouseId, t.payerId),
+  ]
+);
+
 // ─── Relations ────────────────────────────────────────────────────────────────
 
 export const practiceRelations = relations(practices, ({ many }) => ({
