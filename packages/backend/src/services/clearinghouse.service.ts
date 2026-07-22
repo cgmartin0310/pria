@@ -326,10 +326,9 @@ export async function testServiceReview(practiceId: string, connectionId: string
     throw new ClearinghouseError(400, "Connection has no Availity credentials");
   }
 
-  // A deliberately INCOMPLETE probe body. It must be non-empty (Availity
-  // rejects `{}` outright), but it omits every required field so Availity's own
-  // input validation rejects it before anything could ever reach a payer.
-  // This is what makes the probe safe to run against the production host.
+  // Demo is forced on, so submitServiceReview sends the documented empty `{}`
+  // body and the mock scenario header decides the response — nothing here can
+  // reach a real payer. The payload below is therefore unused in demo mode.
   const probe = { requestTypeCode: "HS" };
 
   try {

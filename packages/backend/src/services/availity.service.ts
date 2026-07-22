@@ -528,10 +528,11 @@ export async function submitServiceReview(
   const scenarioId = creds.demo
     ? (opts?.scenarioId ?? "SR-CreateRequestAccepted-i")
     : undefined;
-  // Availity's docs say demo POSTs can send `{}`, but the API rejects it with
-  // "Body cannot be empty" — so always send the real payload. In demo the mock
-  // header decides the response and the body is ignored anyway.
-  const body = JSON.stringify(serviceReview);
+  // Per Availity's demo-scenario docs: "For POST methods, send an empty JSON
+  // body: {}". The mock scenario header decides the response, so the payload is
+  // ignored in demo. (Earlier attempts at this failed only because we were
+  // sending their documented — but invalid — "application.json" content type.)
+  const body = creds.demo ? "{}" : JSON.stringify(serviceReview);
   return serviceReviewRequest(creds, { method: "POST", body }, scenarioId);
 }
 
