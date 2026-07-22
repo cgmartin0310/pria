@@ -155,12 +155,15 @@ function AddPayer({
                         <p className="truncate text-sm text-slate-800">{p.name}</p>
                         <p className="font-mono text-xs text-slate-400">
                           {p.clearinghousePayerId}
-                          {p.capabilities?.["supports278"] === "yes" && (
-                            <span className="ml-2 rounded bg-green-50 px-1.5 py-0.5 font-sans text-[10px] font-medium text-green-700">
-                              278
-                            </span>
-                          )}
                         </p>
+                        {p.capabilities?.["transactions"] && (
+                          <p
+                            className="truncate text-[11px] text-slate-400"
+                            title={p.capabilities["transactions"]}
+                          >
+                            {p.capabilities["transactions"]}
+                          </p>
+                        )}
                       </div>
                       {added ? (
                         <span className="flex items-center gap-1 text-xs font-medium text-green-600">

@@ -183,10 +183,17 @@ export function apiHeaders(
 export interface AvailityPayer {
   payerId: string;
   payerName: string;
-  /** Transaction codes detected in the payer's processingRoutes (e.g. 270, 278). */
+  /**
+   * transactionDescription values from the payer's processingRoutes, e.g.
+   * "Eligibility and Benefits Inquiry", "Claim Status Inquiry".
+   *
+   * NOTE: Availity's payer list does NOT expose 278 prior-authorization
+   * *request* capability. Its 278 values are 278I (Health Care Services
+   * Inquiry) and 278N (Notice of Admission) — neither is the PA request, which
+   * goes through the separate Service Reviews API. Do not infer PA capability
+   * from this list.
+   */
   transactions: string[];
-  /** Whether the payer's routes mention a 278 (prior auth) transaction. */
-  supports278: boolean;
 }
 
 /**
@@ -207,6 +214,19 @@ function extractPayers(json: unknown): AvailityPayer[] {
     }
   }
 
+  /** Recursively collect string values stored under `key`. */
+  const collectByKey = (node: unknown, key: string, out: Set<string>): void => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      node.forEach((n) => collectByKey(n, key, out));
+      return;
+    }
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      if (k === key && typeof v === "string" && v.trim()) out.add(v.trim());
+      else collectByKey(v, key, out);
+    }
+  };
+
   const pick = (o: Record<string, unknown>, keys: string[]): string | null => {
     for (const k of keys) {
       const v = o[k];
@@ -223,15 +243,12 @@ function extractPayers(json: unknown): AvailityPayer[] {
       const payerName = pick(r, ["displayName", "name", "payerName", "description"]);
       if (!payerId || !payerName) return null;
 
-      // processingRoutes carries the per-transaction detail. Its exact shape
-      // isn't published, so scan it for transaction codes rather than assume.
-      const routesRaw = JSON.stringify(r["processingRoutes"] ?? "");
-      const transactions = Array.from(
-        new Set(routesRaw.match(/\b\d{3}[A-Z]?\b/g) ?? [])
-      );
-      const supports278 = /278/.test(routesRaw);
+      // processingRoutes is a list of routes; each carries a
+      // transactionDescription. Collect them wherever they appear.
+      const found = new Set<string>();
+      collectByKey(r["processingRoutes"], "transactionDescription", found);
 
-      return { payerId, payerName, transactions, supports278 };
+      return { payerId, payerName, transactions: Array.from(found).sort() };
     })
     .filter((p): p is AvailityPayer => p !== null);
 }
@@ -245,7 +262,8 @@ async function payerListAttempt(
   const token = await getToken(creds, env);
   return withTimeout(async (signal) => {
     const res = await fetch(`${baseFor(env)}${PAYER_LIST_PATH}${query}`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      // Availity's spec/curl sample uses "application.json" (dot, not slash).
+      headers: { Authorization: `Bearer ${token}`, Accept: "application.json" },
       signal,
     });
     if (!res.ok) {

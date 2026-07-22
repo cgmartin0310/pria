@@ -215,10 +215,9 @@ export async function searchPayers(
     results = payers.map((p) => ({
       clearinghousePayerId: p.payerId,
       name: p.payerName,
-      capabilities: {
-        transactions: p.transactions.join(", "),
-        supports278: p.supports278 ? "yes" : "unknown",
-      },
+      // Availity's payer list doesn't expose 278 prior-auth REQUEST capability
+      // (only 278I inquiry / 278N notice), so report what it does tell us.
+      capabilities: { transactions: p.transactions.join(", ") },
     }));
   } else if (conn.clearinghouse.key === "claim_md") {
     const accountKey = creds.accountKey;
