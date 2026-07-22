@@ -53,10 +53,24 @@ export interface AvailityCredentials {
   environment?: AvailityEnvironment;
 }
 
+/** What we actually put on the wire — for diagnosing API rejections. */
+export interface AvailityRequestDebug {
+  url: string;
+  method: string;
+  contentType: string;
+  bodySent: boolean;
+  bodyLength: number;
+  bodyPreview: string;
+  mockHeaders: boolean;
+  responseStatus?: number;
+  responseBody?: string;
+}
+
 export class AvailityError extends Error {
   constructor(
     message: string,
-    public statusCode = 502
+    public statusCode = 502,
+    public debug?: AvailityRequestDebug
   ) {
     super(message);
     this.name = "AvailityError";
@@ -420,14 +434,37 @@ async function serviceReviewAttempt(
   const token = await getToken(creds, env);
   return withTimeout(async (signal) => {
     const url = `${baseFor(env)}${path}${init.idSuffix ?? ""}`;
+    const headers = serviceReviewHeaders(token, creds, scenarioId);
+
+    const debug: AvailityRequestDebug = {
+      url,
+      method: init.method,
+      contentType: headers["Content-Type"] ?? "(none)",
+      bodySent: init.body !== undefined,
+      bodyLength: init.body?.length ?? 0,
+      bodyPreview: (init.body ?? "").slice(0, 200),
+      mockHeaders: !!creds.demo,
+    };
+
     const res = await fetch(url, {
       method: init.method,
-      headers: serviceReviewHeaders(token, creds, scenarioId),
+      headers,
       ...(init.body !== undefined ? { body: init.body } : {}),
       signal,
     });
 
-    const json: unknown = await res.json().catch(() => null);
+    // Read as text first — Availity's errors aren't always JSON.
+    const text = await res.text().catch(() => "");
+    debug.responseStatus = res.status;
+    debug.responseBody = text.slice(0, 500);
+
+    let json: unknown = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+
     const result = parseServiceReview(res.status, res.headers.get("location"), json);
 
     // 200 = complete, 202 = accepted/in-progress. Anything else is an error we
@@ -436,8 +473,12 @@ async function serviceReviewAttempt(
       const detail =
         result.validationMessages.length > 0
           ? result.validationMessages.join(" | ")
-          : `HTTP ${res.status}`;
-      throw new AvailityError(`Availity service review failed: ${detail}`, res.status);
+          : text || `HTTP ${res.status}`;
+      throw new AvailityError(
+        `Availity service review failed: ${detail}`,
+        res.status,
+        debug
+      );
     }
     return result;
   });

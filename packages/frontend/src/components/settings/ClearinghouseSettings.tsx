@@ -427,6 +427,17 @@ function ClearinghouseCard({
                         {srTest.validationMessages.join(" | ")}
                       </p>
                     )}
+                    {srTest.debug && (
+                      <pre className="mt-2 max-h-56 overflow-auto rounded bg-white/60 p-2 font-mono text-[11px] leading-relaxed text-slate-700">
+{`${srTest.debug.method} ${srTest.debug.url}
+Content-Type: ${srTest.debug.contentType}
+Mock headers: ${srTest.debug.mockHeaders}
+Body sent: ${srTest.debug.bodySent} (${srTest.debug.bodyLength} bytes)
+Body: ${srTest.debug.bodyPreview}
+→ HTTP ${srTest.debug.responseStatus ?? "?"}
+${srTest.debug.responseBody ?? ""}`}
+                      </pre>
+                    )}
                   </div>
                 )}
               </div>

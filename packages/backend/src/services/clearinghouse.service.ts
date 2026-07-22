@@ -350,6 +350,7 @@ export async function testServiceReview(practiceId: string, connectionId: string
       statusCode: result.statusCode,
       serviceReviewId: result.id,
       validationMessages: result.validationMessages,
+      debug: null,
       message:
         "Service Reviews accepted the call — your subscription includes 278.",
     };
@@ -361,6 +362,9 @@ export async function testServiceReview(practiceId: string, connectionId: string
     // 401/403 = genuinely no access. Anything else (esp. 400 validation) means
     // we authenticated and reached the Service Reviews API — i.e. we DO have
     // access, and the messages are its required-field feedback.
+    const debug =
+      err instanceof availity.AvailityError ? (err.debug ?? null) : null;
+
     const denied = httpStatus === 401 || httpStatus === 403;
     if (denied) {
       return {
@@ -370,6 +374,7 @@ export async function testServiceReview(practiceId: string, connectionId: string
         statusCode: null,
         serviceReviewId: null,
         validationMessages: [],
+        debug,
         message:
           "Availity rejected the call as unauthorized — Service Reviews is NOT included in this subscription.",
       };
@@ -382,6 +387,7 @@ export async function testServiceReview(practiceId: string, connectionId: string
       statusCode: null,
       serviceReviewId: null,
       validationMessages: [detail],
+      debug,
       message:
         "Service Reviews is reachable — you have 278 access. The probe was " +
         "intentionally incomplete, so this is Availity's field validation talking.",

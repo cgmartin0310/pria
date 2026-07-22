@@ -197,6 +197,17 @@ export interface ServiceReviewTest {
   serviceReviewId: string | null;
   validationMessages: string[];
   message: string;
+  debug?: {
+    url: string;
+    method: string;
+    contentType: string;
+    bodySent: boolean;
+    bodyLength: number;
+    bodyPreview: string;
+    mockHeaders: boolean;
+    responseStatus?: number;
+    responseBody?: string;
+  } | null;
 }
 
 export interface DirectoryPayer {
