@@ -26,7 +26,14 @@
 const PROD_BASE = "https://api.availity.com";
 const TEST_BASE = "https://tst.api.availity.com";
 const TOKEN_PATH = "/v1/token";
-const PAYER_LIST_PATH = "/v1/availity-payer-list";
+// Availity's own docs disagree on the base path: the endpoint page shows
+// /v1/availity-payer-list, while the full API guide consistently uses
+// /availity/v1/... (and /availity/v2/service-reviews). Try the documented-in-
+// the-guide form first, then fall back.
+const PAYER_LIST_PATHS = [
+  "/availity/v1/availity-payer-list",
+  "/v1/availity-payer-list",
+];
 const TIMEOUT_MS = 15_000;
 
 function baseFor(env: AvailityEnvironment): string {
@@ -257,11 +264,12 @@ function extractPayers(json: unknown): AvailityPayer[] {
 async function payerListAttempt(
   creds: AvailityCredentials,
   env: AvailityEnvironment,
+  path: string,
   query: string
 ): Promise<AvailityPayer[]> {
   const token = await getToken(creds, env);
   return withTimeout(async (signal) => {
-    const res = await fetch(`${baseFor(env)}${PAYER_LIST_PATH}${query}`, {
+    const res = await fetch(`${baseFor(env)}${path}${query}`, {
       // Availity's spec/curl sample uses "application.json" (dot, not slash).
       headers: { Authorization: `Bearer ${token}`, Accept: "application.json" },
       signal,
@@ -295,9 +303,13 @@ export async function fetchPayerList(
     primary === "test" ? ["test", "production"] : ["production", "test"];
 
   const errors: string[] = [];
-  for (const env of order) {
+  const attempts = order.flatMap((env) =>
+    PAYER_LIST_PATHS.map((path) => ({ env, path }))
+  );
+
+  for (const { env, path } of attempts) {
     try {
-      const payers = await payerListAttempt(creds, env, query);
+      const payers = await payerListAttempt(creds, env, path, query);
       const limit = opts?.limit ?? 50;
       if (!opts?.q) return payers.slice(0, limit);
 
@@ -311,7 +323,7 @@ export async function fetchPayerList(
         .slice(0, limit);
     } catch (err) {
       errors.push(
-        `${env}: ${err instanceof Error ? err.message : "request failed"}`
+        `${env}${path}: ${err instanceof Error ? err.message : "request failed"}`
       );
     }
   }
