@@ -367,6 +367,11 @@ export const authorizations = pgTable(
     previousAuthNumber: varchar("previous_auth_number", { length: 100 }),
     /** Internal tracking ID. Maps to BHT03 and TRN segment. */
     internalTrackingNumber: varchar("internal_tracking_number", { length: 100 }),
+    /**
+     * The clearinghouse's own id for this submission (e.g. Availity's service
+     * review id), used to poll for the payer's decision.
+     */
+    clearinghouseSubmissionId: varchar("clearinghouse_submission_id", { length: 255 }),
 
     // Clinical
     visitsUsed: integer("visits_used").notNull().default(0),

@@ -330,18 +330,181 @@ export async function fetchPayerList(
   throw new AvailityError(`Availity payer list failed — ${errors.join(" · ")}`, 502);
 }
 
+// ─── Service Reviews (278 prior authorization) ─────────────────────────────────
+
+const SERVICE_REVIEW_PATHS = [
+  "/availity/v2/service-reviews",
+  "/v2/service-reviews",
+];
+
+export interface ServiceReviewResult {
+  httpStatus: number;
+  /** Availity's service review id (used to poll for the decision). */
+  id: string | null;
+  /** Location header to poll when Availity returns 202. */
+  location: string | null;
+  /** e.g. "In Progress", "Certified in Total". */
+  status: string | null;
+  /** e.g. "0" (in progress), "A1" (certified), "A3" (denied), "A4" (pended). */
+  statusCode: string | null;
+  /** Availity/health-plan validation errors, if the request was rejected. */
+  validationMessages: string[];
+  raw: unknown;
+}
+
+function serviceReviewHeaders(
+  token: string,
+  creds: AvailityCredentials,
+  scenarioId?: string
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    // Availity uses "application.json" (dot) throughout its spec.
+    Accept: "application.json",
+    "Content-Type": "application.json",
+  };
+  if (creds.demo) {
+    headers["X-Api-Mock-Response"] = "true";
+    if (scenarioId) headers["X-Api-Mock-Scenario-ID"] = scenarioId;
+  }
+  return headers;
+}
+
+function parseServiceReview(
+  httpStatus: number,
+  location: string | null,
+  json: unknown
+): ServiceReviewResult {
+  const obj = (json && typeof json === "object" ? json : {}) as Record<string, unknown>;
+
+  const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+
+  // validationMessages is an array of objects; surface their text.
+  const messages: string[] = [];
+  const vm = obj["validationMessages"];
+  if (Array.isArray(vm)) {
+    for (const m of vm) {
+      if (typeof m === "string") messages.push(m);
+      else if (m && typeof m === "object") {
+        const mo = m as Record<string, unknown>;
+        const text = str(mo["message"]) ?? str(mo["description"]) ?? null;
+        const field = str(mo["field"]);
+        if (text) messages.push(field ? `${field}: ${text}` : text);
+      }
+    }
+  }
+
+  return {
+    httpStatus,
+    id: str(obj["id"]),
+    location,
+    status: str(obj["status"]),
+    statusCode: str(obj["statusCode"]),
+    validationMessages: messages,
+    raw: json,
+  };
+}
+
+/** One POST/GET attempt against a specific environment + path. */
+async function serviceReviewAttempt(
+  creds: AvailityCredentials,
+  env: AvailityEnvironment,
+  path: string,
+  init: { method: "POST" | "GET"; body?: string; idSuffix?: string },
+  scenarioId?: string
+): Promise<ServiceReviewResult> {
+  const token = await getToken(creds, env);
+  return withTimeout(async (signal) => {
+    const url = `${baseFor(env)}${path}${init.idSuffix ?? ""}`;
+    const res = await fetch(url, {
+      method: init.method,
+      headers: serviceReviewHeaders(token, creds, scenarioId),
+      ...(init.body !== undefined ? { body: init.body } : {}),
+      signal,
+    });
+
+    const json: unknown = await res.json().catch(() => null);
+    const result = parseServiceReview(res.status, res.headers.get("location"), json);
+
+    // 200 = complete, 202 = accepted/in-progress. Anything else is an error we
+    // still want the parsed validation messages from.
+    if (res.status !== 200 && res.status !== 202) {
+      const detail =
+        result.validationMessages.length > 0
+          ? result.validationMessages.join(" | ")
+          : `HTTP ${res.status}`;
+      throw new AvailityError(`Availity service review failed: ${detail}`, res.status);
+    }
+    return result;
+  });
+}
+
+async function serviceReviewRequest(
+  creds: AvailityCredentials,
+  init: { method: "POST" | "GET"; body?: string; idSuffix?: string },
+  scenarioId?: string
+): Promise<ServiceReviewResult> {
+  const primary: AvailityEnvironment =
+    creds.environment ?? (creds.demo ? "test" : "production");
+  const order: AvailityEnvironment[] =
+    primary === "test" ? ["test", "production"] : ["production", "test"];
+
+  const errors: string[] = [];
+  for (const env of order) {
+    for (const path of SERVICE_REVIEW_PATHS) {
+      try {
+        return await serviceReviewAttempt(creds, env, path, init, scenarioId);
+      } catch (err) {
+        // A validation error (4xx) is a real answer — don't keep trying paths.
+        if (err instanceof AvailityError && err.statusCode >= 400 && err.statusCode < 500) {
+          throw err;
+        }
+        errors.push(
+          `${env}${path}: ${err instanceof Error ? err.message : "request failed"}`
+        );
+      }
+    }
+  }
+  throw new AvailityError(`Availity service review failed — ${errors.join(" · ")}`, 502);
+}
+
 /**
- * Submit a 278 Service Review. NOT YET ENABLED — the exact Service Reviews
- * endpoint path + payload schema must be confirmed against Availity's API
- * reference (available once the app is subscribed to the Service Reviews
- * product). Kept as an explicit throw so the submit path fails loudly rather
- * than silently pretending to submit.
+ * Submit a prior authorization (278) as an Availity Service Review.
+ * Availity accepts structured JSON and builds the X12 itself.
+ *
+ * In demo mode Availity ignores the body and returns a canned response, so we
+ * send `{}` per their docs and pass the requested scenario id.
  */
-export async function submitServiceReview(): Promise<never> {
-  throw new AvailityError(
-    "Availity Service Reviews (278) submission is not yet configured — " +
-      "pending confirmation of the endpoint from the API reference.",
-    501
+export async function submitServiceReview(
+  creds: AvailityCredentials,
+  serviceReview: Record<string, unknown>,
+  opts?: { scenarioId?: string }
+): Promise<ServiceReviewResult> {
+  const scenarioId = creds.demo
+    ? (opts?.scenarioId ?? "SR-CreateRequestAccepted-i")
+    : undefined;
+  const body = creds.demo ? "{}" : JSON.stringify(serviceReview);
+  return serviceReviewRequest(creds, { method: "POST", body }, scenarioId);
+}
+
+/**
+ * Retrieve a service review by id to check whether the health plan has decided.
+ * 200 = complete, 202 = still processing.
+ */
+export async function getServiceReview(
+  creds: AvailityCredentials,
+  id: string,
+  opts?: { scenarioId?: string }
+): Promise<ServiceReviewResult> {
+  const scenarioId = creds.demo
+    ? (opts?.scenarioId ?? "SR-GetComplete-i")
+    : undefined;
+  // Demo scenarios that return a body require the documented id 12345678.
+  const effectiveId = creds.demo ? "12345678" : id;
+  return serviceReviewRequest(
+    creds,
+    { method: "GET", idSuffix: `/${encodeURIComponent(effectiveId)}` },
+    scenarioId
   );
 }
 

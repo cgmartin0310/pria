@@ -1,0 +1,1 @@
+ALTER TABLE "authorizations" ADD COLUMN "clearinghouse_submission_id" varchar(255);

@@ -7,6 +7,8 @@ import { assembleX278Request } from "../services/edi-assembler.service.js";
 import { getRoutingForPayer } from "../services/clearinghouse.service.js";
 import { buildSimulatedResponse } from "../services/simulated.service.js";
 import { applyX278Response } from "../services/edi-response.service.js";
+import * as availity from "../services/availity.service.js";
+import { toServiceReview } from "../services/availity-mapper.service.js";
 import type { PASubmitJobData } from "../types/index.js";
 
 const { authorizations, authorizationHistory } = schema;
@@ -60,9 +62,11 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
     // and handles subscriber vs. dependent logic.
     let assemblyWarnings: string[] = [];
     let ediContent: string;
+    let assembledRequest: Awaited<ReturnType<typeof assembleX278Request>>["request"];
 
     try {
       const assembled = await assembleX278Request(authorizationId, practiceId);
+      assembledRequest = assembled.request;
 
       if (assembled.warnings.length > 0) {
         assemblyWarnings = assembled.warnings;
@@ -161,22 +165,58 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
       return;
     }
 
-    // ── Submit through the clearinghouse adapter ──────────────────────────
-    // The 278 is fully generated. Live submission via Availity's Service Reviews
-    // API is pending confirmation of the endpoint from their API reference, so
-    // for now we hold the auth as pending with the EDI recorded rather than
-    // pretending it was transmitted.
+    // ── Availity: submit as a Service Review (structured JSON, not raw X12) ──
     if (routing.clearinghouseKey === "availity") {
+      const creds = routing.credentials ?? {};
+      if (!creds.clientId || !creds.clientSecret) {
+        throw new Error("Availity connection is missing credentials");
+      }
+
+      const payload = toServiceReview(assembledRequest, {
+        availityPayerId: routing.clearinghousePayerId,
+      });
+
+      const result = await availity.submitServiceReview(
+        {
+          clientId: creds.clientId,
+          clientSecret: creds.clientSecret,
+          scope: creds.scope,
+          demo: creds.demo,
+          environment: creds.environment,
+        },
+        payload
+      );
+
+      // Availity returns 202 + a Location to poll; a terminal statusCode may
+      // already be present (A1 certified / A3 denied / A4 pended).
+      const terminal = result.statusCode === "A1" || result.statusCode === "A3";
+
       await db
         .update(authorizations)
-        .set({ status: "pending", submittedAt: new Date(), updatedAt: new Date() })
+        .set({
+          status: terminal
+            ? result.statusCode === "A1"
+              ? "approved"
+              : "denied"
+            : "pending",
+          clearinghouseSubmissionId: result.id ?? null,
+          submittedAt: new Date(),
+          ...(terminal ? { decidedAt: new Date() } : {}),
+          ...(result.statusCode ? { decisionCode: result.statusCode } : {}),
+          ...(result.status ? { decisionMessage: result.status } : {}),
+          updatedAt: new Date(),
+        })
         .where(eq(authorizations.id, authorizationId));
 
       const notes = [
-        `X12 278 generated (${ediContent.length} chars, ` +
-          `${ediContent.split("~").length - 1} segments) and routed to Availity` +
-          (routing.credentials?.demo ? " (demo)" : "") +
-          `. Live Service Reviews submission not yet enabled — awaiting endpoint configuration.`,
+        `Submitted to Availity Service Reviews${creds.demo ? " (demo)" : ""}` +
+          ` — HTTP ${result.httpStatus}` +
+          (result.id ? `, service review ${result.id}` : "") +
+          (result.status ? `, status: ${result.status} (${result.statusCode ?? "?"})` : ""),
+        result.validationMessages.length > 0
+          ? `Validation: ${result.validationMessages.join(" | ")}`
+          : null,
+        `X12 278 also generated locally (${ediContent.split("~").length - 1} segments) for audit.`,
         assemblyWarnings.length > 0
           ? `Assembly warnings: ${assemblyWarnings.join(" | ")}`
           : null,
@@ -186,12 +226,20 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
 
       await db.insert(authorizationHistory).values({
         authorizationId,
-        action: "edi_generated",
+        action: terminal ? "decision_received" : "submitted_to_clearinghouse",
         fromStatus: "submitted",
-        toStatus: "pending",
+        toStatus: terminal
+          ? result.statusCode === "A1"
+            ? "approved"
+            : "denied"
+          : "pending",
         notes,
         performedBy: "system",
       });
+
+      console.log(
+        `[pa-submit] Availity service review ${result.id ?? "(no id)"} → ${result.status ?? "accepted"}`
+      );
       return;
     }
 
