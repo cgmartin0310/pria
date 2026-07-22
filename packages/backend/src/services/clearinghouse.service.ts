@@ -225,8 +225,13 @@ export async function syncPayerDirectory(
 
   let offset = 0;
   let pages = 0;
-  let synced = 0;
   let truncated = false;
+
+  // Availity returns one row per payer PER TRANSACTION ROUTE, so the same
+  // payerId recurs many times. Collect and merge first — inserting duplicates in
+  // one statement fails with "ON CONFLICT DO UPDATE command cannot affect row a
+  // second time".
+  const collected = new Map<string, { name: string; transactions: Set<string> }>();
 
   for (; pages < MAX_PAGES; pages++) {
     const page = await availity.fetchPayerList(availityCreds, {
@@ -235,17 +240,38 @@ export async function syncPayerDirectory(
     });
     if (page.length === 0) break;
 
-    // Upsert the page.
+    for (const p of page) {
+      const existing = collected.get(p.payerId);
+      if (existing) {
+        for (const t of p.transactions) existing.transactions.add(t);
+      } else {
+        collected.set(p.payerId, {
+          name: p.payerName,
+          transactions: new Set(p.transactions),
+        });
+      }
+    }
+
+    offset += PAGE;
+    if (page.length < PAGE) break; // last page
+    await new Promise((r) => setTimeout(r, SPACING_MS));
+  }
+
+  if (pages >= MAX_PAGES) truncated = true;
+
+  // Bulk upsert the de-duplicated directory in chunks.
+  const rows = Array.from(collected.entries()).map(([payerId, v]) => ({
+    clearinghouseId: conn.clearinghouseId,
+    payerId,
+    name: v.name,
+    transactions: Array.from(v.transactions).sort(),
+  }));
+
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
     await db
       .insert(clearinghousePayerDirectory)
-      .values(
-        page.map((p) => ({
-          clearinghouseId: conn.clearinghouseId,
-          payerId: p.payerId,
-          name: p.payerName,
-          transactions: p.transactions,
-        }))
-      )
+      .values(rows.slice(i, i + CHUNK))
       .onConflictDoUpdate({
         target: [
           clearinghousePayerDirectory.clearinghouseId,
@@ -257,15 +283,9 @@ export async function syncPayerDirectory(
           updatedAt: new Date(),
         },
       });
-
-    synced += page.length;
-    offset += PAGE;
-
-    if (page.length < PAGE) break; // last page
-    await new Promise((r) => setTimeout(r, SPACING_MS));
   }
 
-  if (pages >= MAX_PAGES) truncated = true;
+  const synced = rows.length;
 
   await db
     .update(practiceClearinghouses)
