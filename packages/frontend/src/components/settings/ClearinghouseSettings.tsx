@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, X, Check, RefreshCw, Link2 } from "lucide-react";
+import { Plus, X, Check, RefreshCw, Link2, Search } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
@@ -8,6 +8,7 @@ import {
   clearinghouseApi,
   type Clearinghouse,
   type ClearinghouseConnection,
+  type DirectoryPayer,
 } from "@/lib/api.js";
 
 function formatDate(d: string | null): string {
@@ -24,10 +25,12 @@ function formatDate(d: string | null): string {
 function AddPayer({
   connectionId,
   isAdmin,
+  supportsSearch,
   onChanged,
 }: {
   connectionId: string;
   isAdmin: boolean;
+  supportsSearch: boolean;
   onChanged: () => void;
 }) {
   const [name, setName] = useState("");
@@ -35,6 +38,56 @@ function AddPayer({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ── Directory search ──
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<DirectoryPayer[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [showManual, setShowManual] = useState(!supportsSearch);
+
+  useEffect(() => {
+    if (!supportsSearch) return;
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setSearching(false);
+      setSearchError(null);
+      return;
+    }
+    setSearching(true);
+    setSearchError(null);
+    const handle = setTimeout(() => {
+      clearinghouseApi
+        .searchPayers(connectionId, q)
+        .then((res) => setResults(res.data ?? []))
+        .catch((e: { message?: string }) => {
+          setResults([]);
+          setSearchError(e?.message ?? "Payer search failed");
+        })
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [query, connectionId, supportsSearch]);
+
+  const handleAddFromDirectory = async (p: DirectoryPayer) => {
+    setAdding(p.clearinghousePayerId);
+    try {
+      await clearinghouseApi.addPayer(connectionId, {
+        clearinghousePayerId: p.clearinghousePayerId,
+        name: p.name,
+        capabilities: p.capabilities,
+      });
+      setAddedIds((prev) => new Set(prev).add(p.clearinghousePayerId));
+      onChanged();
+    } catch (e) {
+      setSearchError((e as { message?: string })?.message ?? "Couldn't add payer");
+    } finally {
+      setAdding(null);
+    }
+  };
 
   const handleAdd = async () => {
     if (!name.trim() || !payerId.trim()) return;
@@ -63,10 +116,81 @@ function AddPayer({
       <div>
         <p className="text-sm font-medium text-slate-700">Add payers</p>
         <p className="text-xs text-slate-500">
-          Add the payers your practice works with (name + their EDI payer ID).
-          Added payers appear in patient &amp; authorization forms.
+          Add the payers your practice works with. Added payers appear in patient
+          &amp; authorization forms.
         </p>
       </div>
+
+      {/* Directory search */}
+      {supportsSearch && (
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search the clearinghouse payer directory…"
+              className="pl-8"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              disabled={!isAdmin}
+            />
+          </div>
+
+          {searchError && <p className="text-xs text-amber-600">{searchError}</p>}
+
+          {query.trim().length >= 2 && (
+            <div className="max-h-64 overflow-y-auto rounded-md border border-slate-200">
+              {searching ? (
+                <p className="p-3 text-sm text-slate-400">Searching…</p>
+              ) : results.length === 0 ? (
+                <p className="p-3 text-sm text-slate-400">No matching payers</p>
+              ) : (
+                results.map((p) => {
+                  const added = p.added || addedIds.has(p.clearinghousePayerId);
+                  return (
+                    <div
+                      key={p.clearinghousePayerId}
+                      className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2 last:border-b-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-slate-800">{p.name}</p>
+                        <p className="font-mono text-xs text-slate-400">
+                          {p.clearinghousePayerId}
+                        </p>
+                      </div>
+                      {added ? (
+                        <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                          <Check className="h-3.5 w-3.5" /> Added
+                        </span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!isAdmin || adding === p.clearinghousePayerId}
+                          onClick={() => handleAddFromDirectory(p)}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          {adding === p.clearinghousePayerId ? "Adding…" : "Add"}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowManual((s) => !s)}
+            className="text-xs text-slate-500 underline hover:text-slate-700"
+          >
+            {showManual ? "Hide manual entry" : "Can't find it? Add manually"}
+          </button>
+        </div>
+      )}
+
+      {/* Manual entry (fallback / Test Mode) */}
+      {showManual && (
       <div className="grid grid-cols-[1fr,180px,auto] gap-2">
         <Input
           placeholder="Payer name (e.g. Aetna)"
@@ -89,6 +213,7 @@ function AddPayer({
           {saving ? "Adding…" : "Add"}
         </Button>
       </div>
+      )}
       {saved && (
         <p className="flex items-center gap-1 text-xs text-green-600">
           <Check className="h-3.5 w-3.5" /> Payer added
@@ -221,6 +346,7 @@ function ClearinghouseCard({
               <AddPayer
                 connectionId={connection.id}
                 isAdmin={isAdmin}
+                supportsSearch={!isSimulated}
                 onChanged={onChanged}
               />
             </div>

@@ -26,6 +26,7 @@
 const PROD_BASE = "https://api.availity.com";
 const TEST_BASE = "https://tst.api.availity.com";
 const TOKEN_PATH = "/v1/token";
+const PAYER_LIST_PATH = "/v1/availity-payer-list";
 const TIMEOUT_MS = 15_000;
 
 function baseFor(env: AvailityEnvironment): string {
@@ -175,6 +176,111 @@ export function apiHeaders(
     if (opts.scenarioId) headers["X-Api-Mock-Scenario-ID"] = opts.scenarioId;
   }
   return headers;
+}
+
+// ─── Payer List ───────────────────────────────────────────────────────────────
+
+export interface AvailityPayer {
+  payerId: string;
+  payerName: string;
+}
+
+/**
+ * Pull the payer array out of Availity's response regardless of wrapper shape,
+ * and normalise the id/name field names (they vary across their APIs).
+ */
+function extractPayers(json: unknown): AvailityPayer[] {
+  let rows: unknown[] = [];
+  if (Array.isArray(json)) {
+    rows = json;
+  } else if (json && typeof json === "object") {
+    const obj = json as Record<string, unknown>;
+    for (const key of ["payers", "availityPayerList", "payerList", "data", "results"]) {
+      if (Array.isArray(obj[key])) {
+        rows = obj[key] as unknown[];
+        break;
+      }
+    }
+  }
+
+  const pick = (o: Record<string, unknown>, keys: string[]): string | null => {
+    for (const k of keys) {
+      const v = o[k];
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    return null;
+  };
+
+  return rows
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+    .map((r) => {
+      const payerId = pick(r, ["payerId", "payerID", "id", "payerCode", "code"]);
+      const payerName = pick(r, ["payerName", "name", "displayName", "description"]);
+      return payerId && payerName ? { payerId, payerName } : null;
+    })
+    .filter((p): p is AvailityPayer => p !== null);
+}
+
+/** One token+request attempt against a specific environment. */
+async function payerListAttempt(
+  creds: AvailityCredentials,
+  env: AvailityEnvironment,
+  query: string
+): Promise<AvailityPayer[]> {
+  const token = await getToken(creds, env);
+  return withTimeout(async (signal) => {
+    const res = await fetch(`${baseFor(env)}${PAYER_LIST_PATH}${query}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      signal,
+    });
+    if (!res.ok) {
+      throw new AvailityError(`Availity payer list returned ${res.status}`, 502);
+    }
+    return extractPayers(await res.json());
+  });
+}
+
+/**
+ * Fetch Availity's payer directory. Tries the connection's resolved environment
+ * first, then the other host (tokens are environment-specific, so each attempt
+ * fetches its own token).
+ */
+export async function fetchPayerList(
+  creds: AvailityCredentials,
+  opts?: { q?: string; limit?: number }
+): Promise<AvailityPayer[]> {
+  const params = new URLSearchParams();
+  if (opts?.q) params.set("payerName", opts.q);
+  params.set("limit", String(opts?.limit ?? 50));
+  const query = `?${params.toString()}`;
+
+  const primary: AvailityEnvironment =
+    creds.environment ?? (creds.demo ? "test" : "production");
+  const order: AvailityEnvironment[] =
+    primary === "test" ? ["test", "production"] : ["production", "test"];
+
+  const errors: string[] = [];
+  for (const env of order) {
+    try {
+      const payers = await payerListAttempt(creds, env, query);
+      // Belt-and-braces: filter locally too, in case the server ignored the param.
+      if (opts?.q) {
+        const q = opts.q.toLowerCase();
+        const matches = payers.filter(
+          (p) =>
+            p.payerName.toLowerCase().includes(q) ||
+            p.payerId.toLowerCase().includes(q)
+        );
+        if (matches.length > 0) return matches;
+      }
+      return payers;
+    } catch (err) {
+      errors.push(
+        `${env}: ${err instanceof Error ? err.message : "request failed"}`
+      );
+    }
+  }
+  throw new AvailityError(`Availity payer list failed — ${errors.join(" · ")}`, 502);
 }
 
 /**

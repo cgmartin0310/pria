@@ -189,14 +189,48 @@ export async function searchPayers(
   query: string
 ) {
   const conn = await getConnection(practiceId, connectionId);
-  const accountKey = conn.credentials?.accountKey;
-  if (!accountKey) throw new ClearinghouseError(400, "Connection has no Account Key");
+  const creds = conn.credentials ?? {};
 
-  if (conn.clearinghouse.key !== "claim_md") {
-    throw new ClearinghouseError(400, "Payer search not supported for this clearinghouse");
+  // Normalised results across clearinghouses.
+  let results: Array<{
+    clearinghousePayerId: string;
+    name: string;
+    capabilities?: Record<string, string>;
+  }>;
+
+  if (conn.clearinghouse.key === "availity") {
+    if (!creds.clientId || !creds.clientSecret) {
+      throw new ClearinghouseError(400, "Connection has no Availity credentials");
+    }
+    const payers = await availity.fetchPayerList(
+      {
+        clientId: creds.clientId,
+        clientSecret: creds.clientSecret,
+        scope: creds.scope,
+        demo: creds.demo,
+        environment: creds.environment,
+      },
+      { q: query }
+    );
+    results = payers.map((p) => ({
+      clearinghousePayerId: p.payerId,
+      name: p.payerName,
+    }));
+  } else if (conn.clearinghouse.key === "claim_md") {
+    const accountKey = creds.accountKey;
+    if (!accountKey) throw new ClearinghouseError(400, "Connection has no Account Key");
+    const payers = await claimmd.fetchPayerList(accountKey, query);
+    results = payers.map((p) => ({
+      clearinghousePayerId: p.payerid,
+      name: p.payer_name,
+      capabilities: p.capabilities,
+    }));
+  } else {
+    throw new ClearinghouseError(
+      400,
+      "Payer search isn't available for this clearinghouse — add payers manually."
+    );
   }
-
-  const results = await claimmd.fetchPayerList(accountKey, query);
 
   // Flag which are already imported into this clearinghouse's directory.
   const existing = await db
@@ -206,10 +240,9 @@ export async function searchPayers(
   const have = new Set(existing.map((e) => e.chPayerId));
 
   return results.slice(0, 50).map((p) => ({
-    clearinghousePayerId: p.payerid,
-    name: p.payer_name,
-    capabilities: p.capabilities,
-    added: have.has(p.payerid),
+    ...p,
+    capabilities: p.capabilities ?? {},
+    added: have.has(p.clearinghousePayerId),
   }));
 }
 
