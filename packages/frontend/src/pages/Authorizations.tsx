@@ -221,6 +221,8 @@ export default function Authorizations() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewFor, setPreviewFor] = useState<Row | null>(null);
+  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -232,6 +234,25 @@ export default function Authorizations() {
   }, []);
 
   useEffect(() => load(), [load]);
+
+  // Submission is queued and processed by a worker, so reload once immediately
+  // and again shortly after to pick up the resulting decision.
+  const handleSubmit = async (id: string) => {
+    setSubmitting(id);
+    setSubmitError(null);
+    try {
+      await authorizationsApi.submit(id);
+      load();
+      setTimeout(load, 2500);
+    } catch (e) {
+      setSubmitError(
+        (e as { message?: string })?.message ??
+          "Submission failed — try Preview 278 to see what's missing."
+      );
+    } finally {
+      setSubmitting(null);
+    }
+  };
 
   const filtered = rows.filter((auth) => {
     const q = search.toLowerCase();
@@ -360,14 +381,26 @@ export default function Authorizations() {
                       {auth.authNumber ?? "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPreviewFor(auth)}
-                      >
-                        <FileCode className="h-3.5 w-3.5" />
-                        Preview 278
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPreviewFor(auth)}
+                        >
+                          <FileCode className="h-3.5 w-3.5" />
+                          Preview 278
+                        </Button>
+                        {auth.status === "draft" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSubmit(auth.id)}
+                            disabled={submitting === auth.id}
+                          >
+                            {submitting === auth.id ? "Submitting…" : "Submit"}
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -376,6 +409,10 @@ export default function Authorizations() {
           </Table>
         </CardContent>
       </Card>
+
+      {submitError && (
+        <p className="text-sm text-red-600">{submitError}</p>
+      )}
 
       <p className="text-xs text-slate-400">
         Showing {filtered.length} authorization{filtered.length !== 1 ? "s" : ""}

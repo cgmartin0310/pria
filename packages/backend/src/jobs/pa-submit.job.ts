@@ -5,6 +5,8 @@ import { db, schema } from "../db/index.js";
 import * as ediService from "../services/edi.service.js";
 import { assembleX278Request } from "../services/edi-assembler.service.js";
 import { getRoutingForPayer } from "../services/clearinghouse.service.js";
+import { buildSimulatedResponse } from "../services/simulated.service.js";
+import { applyX278Response } from "../services/edi-response.service.js";
 import type { PASubmitJobData } from "../types/index.js";
 
 const { authorizations, authorizationHistory } = schema;
@@ -124,6 +126,38 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
           `Update the payer's 278 setting or submit manually.`,
         performedBy: "system",
       });
+      return;
+    }
+
+    // ── Test Mode: simulate the full round trip ───────────────────────────
+    // Takes the real generated 278, returns a canned 278 RESPONSE, parses it,
+    // and applies the decision — exercising the whole pipeline end to end.
+    // Every decision is labelled as simulated in the authorization history.
+    if (routing.clearinghouseKey === "simulated") {
+      const decision = routing.credentials?.simulatedDecision ?? "A1";
+
+      const { edi: responseEdi } = buildSimulatedResponse({
+        decision,
+        traceNumber: auth.internalTrackingNumber ?? authorizationId,
+        payerName: auth.payer.name,
+        payerId: routing.clearinghousePayerId,
+        practiceName: "PRACTICE",
+        practiceNpi: "0000000000",
+        patientLastName: "PATIENT",
+        patientFirstName: "TEST",
+        memberId: "TESTMEMBER",
+      });
+
+      const applied = await applyX278Response(
+        authorizationId,
+        practiceId,
+        responseEdi,
+        { source: "Test Mode (simulated payer)", simulated: true }
+      );
+
+      console.log(
+        `[pa-submit] SIMULATED decision ${decision} → ${applied.status} for auth ${authorizationId}`
+      );
       return;
     }
 

@@ -6,10 +6,13 @@ import { requireRole } from "../auth/tenant.js";
 
 const connectSchema = z.object({
   clearinghouseKey: z.string().min(1),
-  clientId: z.string().min(1),
-  clientSecret: z.string().min(1),
+  // Required for real networks (validated per-network in the service); Test Mode
+  // needs no credentials.
+  clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
   scope: z.string().optional(),
   demo: z.boolean().optional(),
+  simulatedDecision: z.enum(["A1", "A3", "A4"]).optional(),
   label: z.string().max(255).optional(),
 });
 
@@ -71,6 +74,7 @@ export async function clearinghouseRoutes(app: FastifyInstance) {
             clientSecret: parsed.data.clientSecret,
             scope: parsed.data.scope,
             demo: parsed.data.demo,
+            simulatedDecision: parsed.data.simulatedDecision,
           },
           parsed.data.label
         );

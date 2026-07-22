@@ -201,10 +201,11 @@ export const clearinghouseApi = {
     api.get<ApiResponse<ClearinghouseConnection[]>>("/clearinghouses/connections"),
   connect: (data: {
     clearinghouseKey: string;
-    clientId: string;
-    clientSecret: string;
+    clientId?: string;
+    clientSecret?: string;
     scope?: string;
     demo?: boolean;
+    simulatedDecision?: "A1" | "A3" | "A4";
     label?: string;
   }) =>
     api.post<ApiResponse<{ id: string; connected: boolean }>>(

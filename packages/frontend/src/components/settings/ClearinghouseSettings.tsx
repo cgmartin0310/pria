@@ -115,24 +115,30 @@ function ClearinghouseCard({
   isAdmin: boolean;
   onChanged: () => void;
 }) {
+  const isSimulated = clearinghouse.key === "simulated";
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [scope, setScope] = useState("");
   const [demo, setDemo] = useState(true);
+  const [simulatedDecision, setSimulatedDecision] = useState<"A1" | "A3" | "A4">("A1");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleConnect = async () => {
-    if (!clientId.trim() || !clientSecret.trim()) return;
+    if (!isSimulated && (!clientId.trim() || !clientSecret.trim())) return;
     setBusy(true);
     setError(null);
     try {
       await clearinghouseApi.connect({
         clearinghouseKey: clearinghouse.key,
-        clientId: clientId.trim(),
-        clientSecret: clientSecret.trim(),
-        scope: scope.trim() || undefined,
-        demo,
+        ...(isSimulated
+          ? { simulatedDecision }
+          : {
+              clientId: clientId.trim(),
+              clientSecret: clientSecret.trim(),
+              scope: scope.trim() || undefined,
+              demo,
+            }),
       });
       setClientId("");
       setClientSecret("");
@@ -228,13 +234,48 @@ function ClearinghouseCard({
           </>
         ) : (
           <>
-            <p className="text-sm text-slate-500">
-              Connect your {clearinghouse.name} account to send 278 prior-auth
-              requests. Create an app in the {clearinghouse.name} developer portal,
-              subscribe it to an API product, then paste its OAuth Client ID and
-              Client Secret here.
-            </p>
+            {isSimulated ? (
+              <p className="text-sm text-slate-500">
+                Runs the complete pipeline without a live clearinghouse: generates
+                your real X12 278, returns a canned payer response, parses it, and
+                applies the decision. Every result is clearly marked as simulated.
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">
+                Connect your {clearinghouse.name} account to send 278 prior-auth
+                requests. Create an app in the {clearinghouse.name} developer
+                portal, subscribe it to an API product, then paste its OAuth
+                Client ID and Client Secret here.
+              </p>
+            )}
             {isAdmin ? (
+              isSimulated ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Simulated decision
+                    </label>
+                    <select
+                      value={simulatedDecision}
+                      onChange={(e) =>
+                        setSimulatedDecision(e.target.value as "A1" | "A3" | "A4")
+                      }
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="A1">Approved (certified)</option>
+                      <option value="A3">Denied (not certified)</option>
+                      <option value="A4">Pended (more info required)</option>
+                    </select>
+                    <p className="mt-1 text-xs text-slate-400">
+                      What the simulated payer returns for each submission.
+                      Reconnect to change it.
+                    </p>
+                  </div>
+                  <Button onClick={handleConnect} disabled={busy}>
+                    {busy ? "Enabling…" : "Enable Test Mode"}
+                  </Button>
+                </div>
+              ) : (
               <div className="space-y-3">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">
@@ -298,6 +339,7 @@ function ClearinghouseCard({
                   </Button>
                 </div>
               </div>
+              )
             ) : (
               <p className="text-xs text-slate-400">
                 Only practice admins can connect a clearinghouse.

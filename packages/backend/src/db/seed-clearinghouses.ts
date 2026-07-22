@@ -16,6 +16,7 @@ const { Pool } = pg;
 
 const CLEARINGHOUSES = [
   { key: "availity", name: "Availity", isActive: true },
+  { key: "simulated", name: "Test Mode (Simulated Payer)", isActive: true },
 ];
 
 async function seed() {

@@ -9,6 +9,8 @@ export interface ConnectCredentials {
   clientSecret?: string;
   scope?: string;
   demo?: boolean;
+  /** Test Mode only. */
+  simulatedDecision?: "A1" | "A3" | "A4";
 }
 
 const { clearinghouses, practiceClearinghouses, clearinghousePayers, payers } =
@@ -84,40 +86,44 @@ export async function connectClearinghouse(
   });
   if (!ch) throw new ClearinghouseError(404, "Unknown clearinghouse");
 
-  // Only networks with a live adapter can be connected.
-  if (clearinghouseKey !== "availity") {
+  let stored: ConnectCredentials;
+
+  if (clearinghouseKey === "simulated") {
+    // Test Mode needs no credentials — just which decision to simulate.
+    stored = { simulatedDecision: creds.simulatedDecision ?? "A1" };
+  } else if (clearinghouseKey === "availity") {
+    if (!creds.clientId || !creds.clientSecret) {
+      throw new ClearinghouseError(400, "Client ID and Client Secret are required");
+    }
+
+    // Validate the credentials against Availity's token endpoint before saving.
+    // demo=true targets the test host (tst.api.availity.com).
+    const ok = await availity.testConnection({
+      clientId: creds.clientId,
+      clientSecret: creds.clientSecret,
+      scope: creds.scope,
+      demo: creds.demo,
+    });
+    if (!ok) {
+      throw new ClearinghouseError(
+        400,
+        "Availity rejected those credentials — check the Client ID / Client Secret " +
+          "(and that your app is subscribed to an API product)."
+      );
+    }
+
+    stored = {
+      clientId: creds.clientId,
+      clientSecret: creds.clientSecret,
+      scope: creds.scope,
+      demo: creds.demo ?? false,
+    };
+  } else {
     throw new ClearinghouseError(
       400,
       `${ch.name} integration is being set up and isn't available to connect yet.`
     );
   }
-
-  if (!creds.clientId || !creds.clientSecret) {
-    throw new ClearinghouseError(400, "Client ID and Client Secret are required");
-  }
-
-  // Validate the credentials against Availity's token endpoint before saving.
-  // demo=true targets the test host (tst.api.availity.com).
-  const ok = await availity.testConnection({
-    clientId: creds.clientId,
-    clientSecret: creds.clientSecret,
-    scope: creds.scope,
-    demo: creds.demo,
-  });
-  if (!ok) {
-    throw new ClearinghouseError(
-      400,
-      "Availity rejected those credentials — check the Client ID / Client Secret " +
-        "(and that your app is subscribed to an API product)."
-    );
-  }
-
-  const stored = {
-    clientId: creds.clientId,
-    clientSecret: creds.clientSecret,
-    scope: creds.scope,
-    demo: creds.demo ?? false,
-  };
 
   const [row] = await db
     .insert(practiceClearinghouses)
