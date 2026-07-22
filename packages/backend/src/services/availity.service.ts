@@ -270,8 +270,9 @@ async function payerListAttempt(
   const token = await getToken(creds, env);
   return withTimeout(async (signal) => {
     const res = await fetch(`${baseFor(env)}${path}${query}`, {
-      // Availity's spec/curl sample uses "application.json" (dot, not slash).
-      headers: { Authorization: `Bearer ${token}`, Accept: "application.json" },
+      // Standard media type — see the note in serviceReviewHeaders about
+      // Availity's "application.json" documentation typo.
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       signal,
     });
     if (!res.ok) {
@@ -359,9 +360,12 @@ function serviceReviewHeaders(
 ): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
-    // Availity uses "application.json" (dot) throughout its spec.
-    Accept: "application.json",
-    "Content-Type": "application.json",
+    // Availity's docs say "application.json" (dot), but that isn't a valid media
+    // type — their gateway then fails to parse the body and reports "Body cannot
+    // be empty ... content-type is set to 'application/json'". Their own docs are
+    // inconsistent ("application.json" vs "application/xml"), so use the standard.
+    Accept: "application/json",
+    "Content-Type": "application/json",
   };
   if (creds.demo) {
     headers["X-Api-Mock-Response"] = "true";
