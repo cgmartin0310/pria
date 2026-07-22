@@ -32,15 +32,21 @@ async function request<T>(
 ): Promise<T> {
   const url = `${API_PREFIX}${path}`;
   const token = getToken ? await getToken() : null;
+  const hasBody = body !== undefined && body !== null;
+
+  // Only declare a JSON content type when we're actually sending JSON. Fastify
+  // rejects a request that advertises application/json with an empty body
+  // ("Body cannot be empty when content-type is set to 'application/json'"),
+  // which silently broke every bodyless POST — submit, sync, diagnostics.
   const response = await fetch(url, {
     method,
     headers: {
-      "Content-Type": "application/json",
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
       Accept: "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     credentials: "include",
-    body: body ? JSON.stringify(body) : undefined,
+    ...(hasBody ? { body: JSON.stringify(body) } : {}),
   });
 
   if (!response.ok) {
