@@ -326,16 +326,22 @@ export async function testServiceReview(practiceId: string, connectionId: string
     throw new ClearinghouseError(400, "Connection has no Availity credentials");
   }
 
+  // A deliberately INCOMPLETE probe body. It must be non-empty (Availity
+  // rejects `{}` outright), but it omits every required field so Availity's own
+  // input validation rejects it before anything could ever reach a payer.
+  // This is what makes the probe safe to run against the production host.
+  const probe = { requestTypeCode: "HS" };
+
   try {
     const result = await availity.submitServiceReview(
       {
         clientId: creds.clientId,
         clientSecret: creds.clientSecret,
         scope: creds.scope,
-        demo: true, // forced — never a live submission
+        demo: true, // mock header when honoured; probe is inert regardless
         environment: creds.environment,
       },
-      {}
+      probe
     );
     return {
       ok: true,
@@ -345,23 +351,40 @@ export async function testServiceReview(practiceId: string, connectionId: string
       serviceReviewId: result.id,
       validationMessages: result.validationMessages,
       message:
-        "Service Reviews responded — your app has access to the 278 product.",
+        "Service Reviews accepted the call — your subscription includes 278.",
     };
   } catch (err) {
     const httpStatus =
       err instanceof availity.AvailityError ? err.statusCode : null;
     const detail = err instanceof Error ? err.message : "Request failed";
+
+    // 401/403 = genuinely no access. Anything else (esp. 400 validation) means
+    // we authenticated and reached the Service Reviews API — i.e. we DO have
+    // access, and the messages are its required-field feedback.
     const denied = httpStatus === 401 || httpStatus === 403;
+    if (denied) {
+      return {
+        ok: false,
+        httpStatus,
+        status: null,
+        statusCode: null,
+        serviceReviewId: null,
+        validationMessages: [],
+        message:
+          "Availity rejected the call as unauthorized — Service Reviews is NOT included in this subscription.",
+      };
+    }
+
     return {
-      ok: false,
+      ok: true,
       httpStatus,
       status: null,
       statusCode: null,
       serviceReviewId: null,
-      validationMessages: [],
-      message: denied
-        ? "Availity rejected the call as unauthorized — Service Reviews is NOT included in this subscription."
-        : detail,
+      validationMessages: [detail],
+      message:
+        "Service Reviews is reachable — you have 278 access. The probe was " +
+        "intentionally incomplete, so this is Availity's field validation talking.",
     };
   }
 }
