@@ -215,6 +215,10 @@ export async function searchPayers(
     results = payers.map((p) => ({
       clearinghousePayerId: p.payerId,
       name: p.payerName,
+      capabilities: {
+        transactions: p.transactions.join(", "),
+        supports278: p.supports278 ? "yes" : "unknown",
+      },
     }));
   } else if (conn.clearinghouse.key === "claim_md") {
     const accountKey = creds.accountKey;

@@ -183,6 +183,10 @@ export function apiHeaders(
 export interface AvailityPayer {
   payerId: string;
   payerName: string;
+  /** Transaction codes detected in the payer's processingRoutes (e.g. 270, 278). */
+  transactions: string[];
+  /** Whether the payer's routes mention a 278 (prior auth) transaction. */
+  supports278: boolean;
 }
 
 /**
@@ -215,8 +219,19 @@ function extractPayers(json: unknown): AvailityPayer[] {
     .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
     .map((r) => {
       const payerId = pick(r, ["payerId", "payerID", "id", "payerCode", "code"]);
-      const payerName = pick(r, ["payerName", "name", "displayName", "description"]);
-      return payerId && payerName ? { payerId, payerName } : null;
+      // Availity returns both `name` and `displayName`; prefer the display one.
+      const payerName = pick(r, ["displayName", "name", "payerName", "description"]);
+      if (!payerId || !payerName) return null;
+
+      // processingRoutes carries the per-transaction detail. Its exact shape
+      // isn't published, so scan it for transaction codes rather than assume.
+      const routesRaw = JSON.stringify(r["processingRoutes"] ?? "");
+      const transactions = Array.from(
+        new Set(routesRaw.match(/\b\d{3}[A-Z]?\b/g) ?? [])
+      );
+      const supports278 = /278/.test(routesRaw);
+
+      return { payerId, payerName, transactions, supports278 };
     })
     .filter((p): p is AvailityPayer => p !== null);
 }
@@ -247,12 +262,14 @@ async function payerListAttempt(
  */
 export async function fetchPayerList(
   creds: AvailityCredentials,
-  opts?: { q?: string; limit?: number }
+  opts?: { q?: string; transactionType?: string; limit?: number }
 ): Promise<AvailityPayer[]> {
+  // Only send parameters Availity actually documents (payerId, transactionType,
+  // submissionMode, availability, enrollmentRequired) — undocumented params like
+  // a name search or limit can be rejected. Name filtering happens locally.
   const params = new URLSearchParams();
-  if (opts?.q) params.set("payerName", opts.q);
-  params.set("limit", String(opts?.limit ?? 50));
-  const query = `?${params.toString()}`;
+  if (opts?.transactionType) params.set("transactionType", opts.transactionType);
+  const query = params.toString() ? `?${params.toString()}` : "";
 
   const primary: AvailityEnvironment =
     creds.environment ?? (creds.demo ? "test" : "production");
@@ -263,17 +280,17 @@ export async function fetchPayerList(
   for (const env of order) {
     try {
       const payers = await payerListAttempt(creds, env, query);
-      // Belt-and-braces: filter locally too, in case the server ignored the param.
-      if (opts?.q) {
-        const q = opts.q.toLowerCase();
-        const matches = payers.filter(
+      const limit = opts?.limit ?? 50;
+      if (!opts?.q) return payers.slice(0, limit);
+
+      const q = opts.q.toLowerCase();
+      return payers
+        .filter(
           (p) =>
             p.payerName.toLowerCase().includes(q) ||
             p.payerId.toLowerCase().includes(q)
-        );
-        if (matches.length > 0) return matches;
-      }
-      return payers;
+        )
+        .slice(0, limit);
     } catch (err) {
       errors.push(
         `${env}: ${err instanceof Error ? err.message : "request failed"}`
