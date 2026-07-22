@@ -30,9 +30,12 @@ const TOKEN_PATH = "/v1/token";
 // /v1/availity-payer-list, while the full API guide consistently uses
 // /availity/v1/... (and /availity/v2/service-reviews). Try the documented-in-
 // the-guide form first, then fall back.
+// The API Guide's own samples use no /availity/ prefix
+// (https://api.availity.com/v1/availity-payer-list), while some reference pages
+// show /availity/v1/... Try the guide's form first, then the prefixed one.
 const PAYER_LIST_PATHS = [
-  "/availity/v1/availity-payer-list",
   "/v1/availity-payer-list",
+  "/availity/v1/availity-payer-list",
 ];
 const TIMEOUT_MS = 15_000;
 
@@ -227,7 +230,16 @@ function extractPayers(json: unknown): AvailityPayer[] {
     rows = json;
   } else if (json && typeof json === "object") {
     const obj = json as Record<string, unknown>;
-    for (const key of ["payers", "availityPayerList", "payerList", "data", "results"]) {
+    // Availity collection resources wrap the page in a plural key (their docs
+    // call it e.g. "coverages"), alongside offset/limit/count/totalCount.
+    for (const key of [
+      "payers",
+      "availityPayerList",
+      "payerList",
+      "resources",
+      "data",
+      "results",
+    ]) {
       if (Array.isArray(obj[key])) {
         rows = obj[key] as unknown[];
         break;
@@ -305,11 +317,12 @@ export async function fetchPayerList(
   creds: AvailityCredentials,
   opts?: { q?: string; transactionType?: string; limit?: number }
 ): Promise<AvailityPayer[]> {
-  // Only send parameters Availity actually documents (payerId, transactionType,
-  // submissionMode, availability, enrollmentRequired) — undocumented params like
-  // a name search or limit can be rejected. Name filtering happens locally.
+  // Documented params: payerId, transactionType, submissionMode, availability,
+  // enrollmentRequired, plus collection paging (offset/limit, limit max 50).
+  // There is no name-search param, so name filtering happens locally.
   const params = new URLSearchParams();
   if (opts?.transactionType) params.set("transactionType", opts.transactionType);
+  params.set("limit", String(Math.min(opts?.limit ?? 50, 50)));
   const query = params.toString() ? `?${params.toString()}` : "";
 
   const primary: AvailityEnvironment =
@@ -348,8 +361,8 @@ export async function fetchPayerList(
 // ─── Service Reviews (278 prior authorization) ─────────────────────────────────
 
 const SERVICE_REVIEW_PATHS = [
-  "/availity/v2/service-reviews",
   "/v2/service-reviews",
+  "/availity/v2/service-reviews",
 ];
 
 export interface ServiceReviewResult {
@@ -495,14 +508,24 @@ async function serviceReviewRequest(
     primary === "test" ? ["test", "production"] : ["production", "test"];
 
   const errors: string[] = [];
+  // Try every host+path combination before giving up. Previously a 4xx on the
+  // FIRST path short-circuited, so the correct path was never attempted — which
+  // is exactly how a gateway error on a wrong path masqueraded as a real
+  // validation failure.
+  let firstClientError: AvailityError | null = null;
+
   for (const env of order) {
     for (const path of SERVICE_REVIEW_PATHS) {
       try {
         return await serviceReviewAttempt(creds, env, path, init, scenarioId);
       } catch (err) {
-        // A validation error (4xx) is a real answer — don't keep trying paths.
-        if (err instanceof AvailityError && err.statusCode >= 400 && err.statusCode < 500) {
-          throw err;
+        if (
+          err instanceof AvailityError &&
+          err.statusCode >= 400 &&
+          err.statusCode < 500 &&
+          !firstClientError
+        ) {
+          firstClientError = err;
         }
         errors.push(
           `${env}${path}: ${err instanceof Error ? err.message : "request failed"}`
@@ -510,6 +533,9 @@ async function serviceReviewRequest(
       }
     }
   }
+
+  // Prefer a real 4xx (the API talking) over a generic transport failure.
+  if (firstClientError) throw firstClientError;
   throw new AvailityError(`Availity service review failed — ${errors.join(" · ")}`, 502);
 }
 

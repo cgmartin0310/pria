@@ -369,10 +369,15 @@ function ClearinghouseCard({
                 <p className="text-slate-700">
                   {connection.environment
                     ? connection.environment === "test"
-                      ? "Test (tst.api)"
-                      : "Production (api)"
+                      ? "tst.api.availity.com"
+                      : "api.availity.com"
                     : formatDate(connection.lastSyncedAt)}
                 </p>
+                {connection.environment === "production" && connection.demo && (
+                  <p className="mt-0.5 text-[11px] text-slate-400">
+                    Demo subscriptions run on this host too
+                  </p>
+                )}
               </div>
             </div>
 
