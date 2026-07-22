@@ -307,6 +307,65 @@ export async function addPayer(
   return canonical;
 }
 
+/**
+ * Diagnostic: fire a DEMO Service Reviews request to find out whether this
+ * connection's credentials actually have access to the 278 product.
+ *
+ * Always forced to demo mode with Availity's mock scenario, so it never submits
+ * a real authorization to a real payer — it only answers "does my app have
+ * Service Reviews access?".
+ */
+export async function testServiceReview(practiceId: string, connectionId: string) {
+  const conn = await getConnection(practiceId, connectionId);
+  const creds = conn.credentials ?? {};
+
+  if (conn.clearinghouse.key !== "availity") {
+    throw new ClearinghouseError(400, "Only available for Availity connections");
+  }
+  if (!creds.clientId || !creds.clientSecret) {
+    throw new ClearinghouseError(400, "Connection has no Availity credentials");
+  }
+
+  try {
+    const result = await availity.submitServiceReview(
+      {
+        clientId: creds.clientId,
+        clientSecret: creds.clientSecret,
+        scope: creds.scope,
+        demo: true, // forced — never a live submission
+        environment: creds.environment,
+      },
+      {}
+    );
+    return {
+      ok: true,
+      httpStatus: result.httpStatus,
+      status: result.status,
+      statusCode: result.statusCode,
+      serviceReviewId: result.id,
+      validationMessages: result.validationMessages,
+      message:
+        "Service Reviews responded — your app has access to the 278 product.",
+    };
+  } catch (err) {
+    const httpStatus =
+      err instanceof availity.AvailityError ? err.statusCode : null;
+    const detail = err instanceof Error ? err.message : "Request failed";
+    const denied = httpStatus === 401 || httpStatus === 403;
+    return {
+      ok: false,
+      httpStatus,
+      status: null,
+      statusCode: null,
+      serviceReviewId: null,
+      validationMessages: [],
+      message: denied
+        ? "Availity rejected the call as unauthorized — Service Reviews is NOT included in this subscription."
+        : detail,
+    };
+  }
+}
+
 /** Admin override for whether a payer accepts 278 through a clearinghouse. */
 export async function setPayer278(
   practiceId: string,

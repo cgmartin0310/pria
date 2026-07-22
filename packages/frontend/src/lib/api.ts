@@ -189,6 +189,16 @@ export interface ClearinghouseConnection {
   createdAt: string;
 }
 
+export interface ServiceReviewTest {
+  ok: boolean;
+  httpStatus: number | null;
+  status: string | null;
+  statusCode: string | null;
+  serviceReviewId: string | null;
+  validationMessages: string[];
+  message: string;
+}
+
 export interface DirectoryPayer {
   clearinghousePayerId: string;
   name: string;
@@ -216,6 +226,10 @@ export const clearinghouseApi = {
   disconnect: (id: string) =>
     api.delete<ApiResponse<{ disconnected: boolean }>>(
       `/clearinghouses/connections/${id}`
+    ),
+  testServiceReview: (id: string) =>
+    api.post<ApiResponse<ServiceReviewTest>>(
+      `/clearinghouses/connections/${id}/test-service-review`
     ),
   searchPayers: (connId: string, q: string) =>
     api.get<ApiResponse<DirectoryPayer[]>>(

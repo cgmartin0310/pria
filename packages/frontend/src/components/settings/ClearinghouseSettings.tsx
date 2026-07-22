@@ -9,6 +9,7 @@ import {
   type Clearinghouse,
   type ClearinghouseConnection,
   type DirectoryPayer,
+  type ServiceReviewTest,
 } from "@/lib/api.js";
 
 function formatDate(d: string | null): string {
@@ -298,6 +299,31 @@ function ClearinghouseCard({
     }
   };
 
+  const [srTest, setSrTest] = useState<ServiceReviewTest | null>(null);
+  const [srTesting, setSrTesting] = useState(false);
+
+  const handleTestServiceReview = async () => {
+    if (!connection) return;
+    setSrTesting(true);
+    setSrTest(null);
+    try {
+      const res = await clearinghouseApi.testServiceReview(connection.id);
+      setSrTest(res.data);
+    } catch (e) {
+      setSrTest({
+        ok: false,
+        httpStatus: null,
+        status: null,
+        statusCode: null,
+        serviceReviewId: null,
+        validationMessages: [],
+        message: (e as { message?: string })?.message ?? "Test failed",
+      });
+    } finally {
+      setSrTesting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -358,6 +384,53 @@ function ClearinghouseCard({
                 onChanged={onChanged}
               />
             </div>
+
+            {/* Diagnostic: does this app actually have 278 access? */}
+            {isAdmin && !isSimulated && (
+              <div className="border-t border-slate-100 pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700">
+                      Prior auth (278) access
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Sends a safe demo Service Reviews request — no real payer,
+                      no patient data — to confirm whether your subscription
+                      includes 278.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTestServiceReview}
+                    disabled={srTesting}
+                  >
+                    {srTesting ? "Testing…" : "Test 278 access"}
+                  </Button>
+                </div>
+
+                {srTest && (
+                  <div
+                    className={`mt-3 rounded-md border px-3 py-2 text-sm ${
+                      srTest.ok
+                        ? "border-green-200 bg-green-50 text-green-800"
+                        : "border-amber-200 bg-amber-50 text-amber-800"
+                    }`}
+                  >
+                    <p className="font-medium">
+                      {srTest.ok ? "Service Reviews responded" : "No 278 access"}
+                      {srTest.httpStatus ? ` (HTTP ${srTest.httpStatus})` : ""}
+                    </p>
+                    <p className="mt-0.5 text-xs">{srTest.message}</p>
+                    {srTest.validationMessages.length > 0 && (
+                      <p className="mt-1 text-xs">
+                        {srTest.validationMessages.join(" | ")}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {isAdmin && (
               <div className="flex justify-end border-t border-slate-100 pt-3">

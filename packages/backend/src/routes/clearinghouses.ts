@@ -133,6 +133,21 @@ export async function clearinghouseRoutes(app: FastifyInstance) {
     }
   );
 
+  // Diagnostic: does this connection actually have Service Reviews (278) access?
+  app.post(
+    "/clearinghouses/connections/:id/test-service-review",
+    { preHandler: requireRole("admin") },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      try {
+        const data = await chService.testServiceReview(req.auth.practiceId, id);
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    }
+  );
+
   // Admin override: does this payer accept 278?
   app.patch(
     "/clearinghouses/payers/:payerId/278",
