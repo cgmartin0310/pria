@@ -536,6 +536,8 @@ export const practiceClearinghouses = pgTable(
         scope?: string;
         /** Availity demo/sandbox mode (canned mock responses). */
         demo?: boolean;
+        /** Which Availity host authenticated successfully (resolved on connect). */
+        environment?: "production" | "test";
         /** Test Mode only: which decision the simulated payer returns. */
         simulatedDecision?: "A1" | "A3" | "A4";
       }>()

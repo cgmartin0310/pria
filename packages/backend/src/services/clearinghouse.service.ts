@@ -9,6 +9,7 @@ export interface ConnectCredentials {
   clientSecret?: string;
   scope?: string;
   demo?: boolean;
+  environment?: "production" | "test";
   /** Test Mode only. */
   simulatedDecision?: "A1" | "A3" | "A4";
 }
@@ -68,6 +69,7 @@ export async function listConnections(practiceId: string) {
     label: r.label,
     accountKeyMasked: credentialLabel(r.credentials ?? {}),
     demo: r.credentials?.demo ?? false,
+    environment: r.credentials?.environment ?? null,
     isActive: r.isActive,
     lastSyncedAt: r.lastSyncedAt,
     payerCount: countMap.get(r.clearinghouseId) ?? 0,
@@ -96,19 +98,22 @@ export async function connectClearinghouse(
       throw new ClearinghouseError(400, "Client ID and Client Secret are required");
     }
 
-    // Validate the credentials against Availity's token endpoint before saving.
-    // demo=true targets the test host (tst.api.availity.com).
-    const ok = await availity.testConnection({
+    // Validate against Availity's token endpoint before saving. Their docs are
+    // ambiguous about which host demo credentials use, so try both and remember
+    // whichever authenticated.
+    const resolved = await availity.resolveConnection({
       clientId: creds.clientId,
       clientSecret: creds.clientSecret,
       scope: creds.scope,
       demo: creds.demo,
     });
-    if (!ok) {
+
+    if (!resolved.ok) {
       throw new ClearinghouseError(
         400,
-        "Availity rejected those credentials — check the Client ID / Client Secret " +
-          "(and that your app is subscribed to an API product)."
+        `Availity rejected those credentials. Check the Client ID (API KEY), ` +
+          `Client Secret, and that the Scope matches your product's scope ` +
+          `permissions. Details — ${resolved.error}`
       );
     }
 
@@ -117,6 +122,7 @@ export async function connectClearinghouse(
       clientSecret: creds.clientSecret,
       scope: creds.scope,
       demo: creds.demo ?? false,
+      environment: resolved.environment,
     };
   } else {
     throw new ClearinghouseError(

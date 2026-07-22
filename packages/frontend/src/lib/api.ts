@@ -182,6 +182,7 @@ export interface ClearinghouseConnection {
   label: string | null;
   accountKeyMasked: string | null;
   demo: boolean;
+  environment: "production" | "test" | null;
   isActive: boolean;
   lastSyncedAt: string | null;
   payerCount: number;

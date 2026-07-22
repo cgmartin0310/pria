@@ -204,8 +204,16 @@ function ClearinghouseCard({
                 <p className="text-slate-700">{connection.payerCount}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-400">Last updated</p>
-                <p className="text-slate-700">{formatDate(connection.lastSyncedAt)}</p>
+                <p className="text-xs text-slate-400">
+                  {connection.environment ? "Environment" : "Last updated"}
+                </p>
+                <p className="text-slate-700">
+                  {connection.environment
+                    ? connection.environment === "test"
+                      ? "Test (tst.api)"
+                      : "Production (api)"
+                    : formatDate(connection.lastSyncedAt)}
+                </p>
               </div>
             </div>
 

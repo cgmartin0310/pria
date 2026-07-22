@@ -28,17 +28,21 @@ const TEST_BASE = "https://tst.api.availity.com";
 const TOKEN_PATH = "/v1/token";
 const TIMEOUT_MS = 15_000;
 
-function baseFor(demo?: boolean): string {
-  return demo ? TEST_BASE : PROD_BASE;
+function baseFor(env: AvailityEnvironment): string {
+  return env === "test" ? TEST_BASE : PROD_BASE;
 }
+
+export type AvailityEnvironment = "production" | "test";
 
 export interface AvailityCredentials {
   clientId: string;
   clientSecret: string;
-  /** Optional OAuth scope(s), space-separated. */
+  /** Optional OAuth scope(s), space-separated (from the product details page). */
   scope?: string;
   /** When true, API calls request Availity's canned demo responses. */
   demo?: boolean;
+  /** Which host to authenticate against. Resolved on connect if unset. */
+  environment?: AvailityEnvironment;
 }
 
 export class AvailityError extends Error {
@@ -70,7 +74,12 @@ async function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<
  * Exchange client credentials for a bearer access token.
  * Throws AvailityError with a helpful message if the credentials are rejected.
  */
-export async function getToken(creds: AvailityCredentials): Promise<string> {
+export async function getToken(
+  creds: AvailityCredentials,
+  envOverride?: AvailityEnvironment
+): Promise<string> {
+  // client_secret_post: credentials go in the request body (confirmed by the
+  // app's "TOKEN ENDPOINT AUTH METHOD" in Availity's portal).
   const body: Record<string, string> = {
     grant_type: "client_credentials",
     client_id: creds.clientId,
@@ -78,7 +87,9 @@ export async function getToken(creds: AvailityCredentials): Promise<string> {
   };
   if (creds.scope) body["scope"] = creds.scope;
 
-  const tokenUrl = `${baseFor(creds.demo)}${TOKEN_PATH}`;
+  const env: AvailityEnvironment =
+    envOverride ?? creds.environment ?? (creds.demo ? "test" : "production");
+  const tokenUrl = `${baseFor(env)}${TOKEN_PATH}`;
 
   return withTimeout(async (signal) => {
     const res = await fetch(tokenUrl, {
@@ -114,6 +125,36 @@ export async function testConnection(creds: AvailityCredentials): Promise<boolea
   } catch {
     return false;
   }
+}
+
+/**
+ * Availity's docs are ambiguous about which host demo-plan credentials
+ * authenticate against (production vs the tst. test host), so try both and
+ * report which one worked. The result is stored on the connection so later
+ * calls go straight to the right host.
+ */
+export async function resolveConnection(
+  creds: AvailityCredentials
+): Promise<
+  | { ok: true; environment: AvailityEnvironment }
+  | { ok: false; error: string }
+> {
+  const attempts: AvailityEnvironment[] = creds.demo
+    ? ["test", "production"]
+    : ["production", "test"];
+
+  const errors: string[] = [];
+  for (const env of attempts) {
+    try {
+      await getToken(creds, env);
+      return { ok: true, environment: env };
+    } catch (err) {
+      errors.push(
+        `${env}: ${err instanceof Error ? err.message : "request failed"}`
+      );
+    }
+  }
+  return { ok: false, error: errors.join(" · ") };
 }
 
 /**
