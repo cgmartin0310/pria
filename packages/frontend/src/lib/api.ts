@@ -245,9 +245,15 @@ export const clearinghouseApi = {
       `/clearinghouses/connections/${id}`
     ),
   syncDirectory: (id: string) =>
-    api.post<ApiResponse<{ synced: number; pages: number; truncated: boolean }>>(
-      `/clearinghouses/connections/${id}/sync-directory`
-    ),
+    api.post<
+      ApiResponse<{
+        synced: number;
+        pages: number;
+        truncated: boolean;
+        serviceReviewCapable: number;
+        coverageError: string | null;
+      }>
+    >(`/clearinghouses/connections/${id}/sync-directory`),
   testServiceReview: (id: string) =>
     api.post<ApiResponse<ServiceReviewTest>>(
       `/clearinghouses/connections/${id}/test-service-review`

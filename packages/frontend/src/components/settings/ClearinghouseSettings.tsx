@@ -57,9 +57,15 @@ function AddPayer({
     setSearchError(null);
     try {
       const res = await clearinghouseApi.syncDirectory(connectionId);
+      const d = res.data;
       setSyncResult(
-        `Synced ${res.data.synced.toLocaleString()} payers` +
-          (res.data.truncated ? " (list truncated — re-run to continue)" : "")
+        `Synced ${d.synced.toLocaleString()} payers · ` +
+          (d.coverageError
+            ? "278 API coverage lookup failed"
+            : `${d.serviceReviewCapable.toLocaleString()} accept 278 prior auth via API (${
+                d.synced > 0 ? Math.round((d.serviceReviewCapable / d.synced) * 100) : 0
+              }%)`) +
+          (d.truncated ? " · list truncated, re-run to continue" : "")
       );
       onChanged();
     } catch (e) {
@@ -197,18 +203,21 @@ function AddPayer({
                       className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2 last:border-b-0"
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm text-slate-800">{p.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm text-slate-800">{p.name}</p>
+                          {p.capabilities?.["api278"] === "yes" ? (
+                            <span className="shrink-0 rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                              278 API
+                            </span>
+                          ) : p.capabilities?.["api278"] === "no" ? (
+                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                              Portal only
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="font-mono text-xs text-slate-400">
                           {p.clearinghousePayerId}
                         </p>
-                        {p.capabilities?.["transactions"] && (
-                          <p
-                            className="truncate text-[11px] text-slate-400"
-                            title={p.capabilities["transactions"]}
-                          >
-                            {p.capabilities["transactions"]}
-                          </p>
-                        )}
                       </div>
                       {added ? (
                         <span className="flex items-center gap-1 text-xs font-medium text-green-600">

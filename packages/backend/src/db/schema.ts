@@ -616,6 +616,13 @@ export const clearinghousePayerDirectory = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     /** transactionDescription values from the clearinghouse's routes. */
     transactions: jsonb("transactions").$type<string[]>(),
+    /**
+     * True when this payer supports a 278 prior-auth REQUEST via the API
+     * (Availity Service Reviews, subtype HS). This is the field that decides
+     * API vs portal submission — sourced from the Configurations API, NOT the
+     * payer list's 278I/278N transaction types.
+     */
+    supportsServiceReview: boolean("supports_service_review").notNull().default(false),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [

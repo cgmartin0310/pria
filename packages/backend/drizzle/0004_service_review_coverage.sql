@@ -1,0 +1,1 @@
+ALTER TABLE "clearinghouse_payer_directory" ADD COLUMN "supports_service_review" boolean DEFAULT false NOT NULL;

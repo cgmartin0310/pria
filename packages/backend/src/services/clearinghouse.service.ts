@@ -197,7 +197,13 @@ async function getConnection(practiceId: string, connectionId: string) {
 export async function syncPayerDirectory(
   practiceId: string,
   connectionId: string
-): Promise<{ synced: number; pages: number; truncated: boolean }> {
+): Promise<{
+  synced: number;
+  pages: number;
+  truncated: boolean;
+  serviceReviewCapable: number;
+  coverageError: string | null;
+}> {
   const conn = await getConnection(practiceId, connectionId);
   const creds = conn.credentials ?? {};
 
@@ -259,12 +265,25 @@ export async function syncPayerDirectory(
 
   if (pages >= MAX_PAGES) truncated = true;
 
+  // Authoritative 278-request coverage: which payers accept a Service Reviews
+  // (278) request via the API. This is what decides API vs portal submission.
+  let coverage = new Set<string>();
+  let coverageError: string | null = null;
+  try {
+    coverage = await availity.fetchServiceReviewPayerIds(availityCreds, {
+      subtypeId: "HS",
+    });
+  } catch (err) {
+    coverageError = err instanceof Error ? err.message : "coverage lookup failed";
+  }
+
   // Bulk upsert the de-duplicated directory in chunks.
   const rows = Array.from(collected.entries()).map(([payerId, v]) => ({
     clearinghouseId: conn.clearinghouseId,
     payerId,
     name: v.name,
     transactions: Array.from(v.transactions).sort(),
+    supportsServiceReview: coverage.has(payerId),
   }));
 
   const CHUNK = 500;
@@ -280,19 +299,21 @@ export async function syncPayerDirectory(
         set: {
           name: sql`excluded.name`,
           transactions: sql`excluded.transactions`,
+          supportsServiceReview: sql`excluded.supports_service_review`,
           updatedAt: new Date(),
         },
       });
   }
 
   const synced = rows.length;
+  const serviceReviewCapable = rows.filter((r) => r.supportsServiceReview).length;
 
   await db
     .update(practiceClearinghouses)
     .set({ lastSyncedAt: new Date(), updatedAt: new Date() })
     .where(eq(practiceClearinghouses.id, connectionId));
 
-  return { synced, pages, truncated };
+  return { synced, pages, truncated, serviceReviewCapable, coverageError };
 }
 
 /** Search the connected clearinghouse's payer directory. */
@@ -320,6 +341,7 @@ export async function searchPayers(
         payerId: clearinghousePayerDirectory.payerId,
         name: clearinghousePayerDirectory.name,
         transactions: clearinghousePayerDirectory.transactions,
+        supportsServiceReview: clearinghousePayerDirectory.supportsServiceReview,
       })
       .from(clearinghousePayerDirectory)
       .where(
@@ -347,9 +369,11 @@ export async function searchPayers(
     results = rows.map((r) => ({
       clearinghousePayerId: r.payerId,
       name: r.name,
-      // Availity's directory doesn't expose 278 prior-auth REQUEST capability
-      // (only 278I inquiry / 278N notice), so report what it does tell us.
-      capabilities: { transactions: (r.transactions ?? []).join(", ") },
+      capabilities: {
+        transactions: (r.transactions ?? []).join(", "),
+        // Authoritative 278-request capability from the Configurations API.
+        api278: r.supportsServiceReview ? "yes" : "no",
+      },
     }));
   } else if (conn.clearinghouse.key === "claim_md") {
     const accountKey = creds.accountKey;

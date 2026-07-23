@@ -349,6 +349,105 @@ export async function fetchPayerList(
   throw new AvailityError(`Availity payer list failed — ${errors.join(" · ")}`, 502);
 }
 
+// ─── Configurations: which payers support the Service Reviews (278) API ────────
+
+const CONFIG_PATHS = ["/v1/configurations", "/availity/v1/configurations"];
+
+/** Pull the `configurations` array out of the collection response. */
+function extractConfigs(json: unknown): Record<string, unknown>[] {
+  if (json && typeof json === "object") {
+    const obj = json as Record<string, unknown>;
+    if (Array.isArray(obj["configurations"])) {
+      return obj["configurations"] as Record<string, unknown>[];
+    }
+  }
+  return [];
+}
+
+async function configAttempt(
+  creds: AvailityCredentials,
+  env: AvailityEnvironment,
+  path: string,
+  query: string
+): Promise<{ payerId: string; payerName: string }[]> {
+  const token = await getToken(creds, env);
+  return withTimeout(async (signal) => {
+    const res = await fetch(`${baseFor(env)}${path}${query}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      signal,
+    });
+    if (!res.ok) {
+      throw new AvailityError(`Availity configurations returned ${res.status}`, res.status);
+    }
+    const json = await res.json();
+    return extractConfigs(json)
+      .map((c) => ({
+        payerId: typeof c["payerId"] === "string" ? c["payerId"] : null,
+        payerName: typeof c["payerName"] === "string" ? c["payerName"] : "",
+      }))
+      .filter((c): c is { payerId: string; payerName: string } => !!c.payerId);
+  });
+}
+
+/**
+ * The authoritative list of payers that accept a 278 prior-auth REQUEST through
+ * Availity's Service Reviews API. Per Availity's docs, `type=service-reviews`
+ * with no payerId returns "all payers that support the Service Reviews API".
+ * subtype HS = outpatient authorization (PT/OT/ST).
+ *
+ * Returns a Set of Availity payer ids. Pages through the collection.
+ */
+export async function fetchServiceReviewPayerIds(
+  creds: AvailityCredentials,
+  opts?: { subtypeId?: string; maxPages?: number; spacingMs?: number }
+): Promise<Set<string>> {
+  const subtypeId = opts?.subtypeId ?? "HS";
+  const maxPages = opts?.maxPages ?? 200;
+  const spacing = opts?.spacingMs ?? 220;
+
+  const primary: AvailityEnvironment =
+    creds.environment ?? (creds.demo ? "test" : "production");
+  const order: AvailityEnvironment[] =
+    primary === "test" ? ["test", "production"] : ["production", "test"];
+
+  const found = new Set<string>();
+  let offset = 0;
+
+  for (let page = 0; page < maxPages; page++) {
+    const params = new URLSearchParams({
+      type: "service-reviews",
+      subtypeId,
+      limit: "50",
+      offset: String(offset),
+    });
+    const query = `?${params.toString()}`;
+
+    let rows: { payerId: string; payerName: string }[] | null = null;
+    const errors: string[] = [];
+    for (const env of order) {
+      for (const path of CONFIG_PATHS) {
+        try {
+          rows = await configAttempt(creds, env, path, query);
+          break;
+        } catch (err) {
+          errors.push(err instanceof Error ? err.message : "request failed");
+        }
+      }
+      if (rows) break;
+    }
+    if (!rows) {
+      throw new AvailityError(`Availity configurations failed — ${errors.join(" · ")}`, 502);
+    }
+
+    for (const r of rows) found.add(r.payerId);
+    if (rows.length < 50) break;
+    offset += 50;
+    await new Promise((res) => setTimeout(res, spacing));
+  }
+
+  return found;
+}
+
 // ─── Service Reviews (278 prior authorization) ─────────────────────────────────
 
 const SERVICE_REVIEW_PATHS = [
