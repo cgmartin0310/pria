@@ -272,6 +272,45 @@ export const clearinghouseApi = {
     ),
 };
 
+export interface PortalConnection {
+  id: string;
+  portalKey: string;
+  label: string | null;
+  usernameMasked: string | null;
+  hasTotp: boolean;
+  hasSession: boolean;
+  sessionValidUntil: string | null;
+  lastLoginAt: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export const portalApi = {
+  connections: () =>
+    api.get<ApiResponse<PortalConnection[]>>("/portals/connections"),
+  connect: (data: {
+    portalKey?: string;
+    label?: string;
+    username: string;
+    password: string;
+    totpSeed?: string;
+  }) =>
+    api.post<ApiResponse<{ id: string; connected: boolean }>>(
+      "/portals/connect",
+      data
+    ),
+  disconnect: (id: string) =>
+    api.delete<ApiResponse<{ disconnected: boolean }>>(
+      `/portals/connections/${id}`
+    ),
+  totpCheck: (id: string) =>
+    api.get<ApiResponse<{ code: string; secondsRemaining: number }>>(
+      `/portals/connections/${id}/totp-check`
+    ),
+  submissions: () =>
+    api.get<ApiResponse<unknown[]>>("/portals/submissions"),
+};
+
 export interface Icd10Result {
   code: string;
   name: string;
