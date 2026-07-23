@@ -376,10 +376,20 @@ async function configAttempt(
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       signal,
     });
+    // Read as text first so a non-JSON error body is visible in the message.
+    const text = await res.text().catch(() => "");
     if (!res.ok) {
-      throw new AvailityError(`Availity configurations returned ${res.status}`, res.status);
+      throw new AvailityError(
+        `configurations ${res.status}: ${text.slice(0, 300)}`,
+        res.status
+      );
     }
-    const json = await res.json();
+    let json: unknown = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
     return extractConfigs(json)
       .map((c) => ({
         payerId: typeof c["payerId"] === "string" ? c["payerId"] : null,
@@ -410,39 +420,66 @@ export async function fetchServiceReviewPayerIds(
   const order: AvailityEnvironment[] =
     primary === "test" ? ["test", "production"] : ["production", "test"];
 
+  // Availity's docs are explicit that "type without payerId" lists all payers
+  // for Coverages, but ambiguous for service-reviews about subtypeId. Try the
+  // subtyped form first, then without.
+  const variants: Record<string, string>[] = [
+    { type: "service-reviews", subtypeId },
+    { type: "service-reviews" },
+  ];
+
+  const buildQuery = (base: Record<string, string>, offset: number): string =>
+    `?${new URLSearchParams({ ...base, limit: "50", offset: String(offset) }).toString()}`;
+
   const found = new Set<string>();
-  let offset = 0;
 
-  for (let page = 0; page < maxPages; page++) {
-    const params = new URLSearchParams({
-      type: "service-reviews",
-      subtypeId,
-      limit: "50",
-      offset: String(offset),
-    });
-    const query = `?${params.toString()}`;
+  // Find a working variant + host + path using the first page.
+  let working: { base: Record<string, string>; env: AvailityEnvironment; path: string } | null =
+    null;
+  const errors: string[] = [];
 
-    let rows: { payerId: string; payerName: string }[] | null = null;
-    const errors: string[] = [];
+  for (const base of variants) {
     for (const env of order) {
       for (const path of CONFIG_PATHS) {
         try {
-          rows = await configAttempt(creds, env, path, query);
+          const rows = await configAttempt(creds, env, path, buildQuery(base, 0));
+          rows.forEach((r) => found.add(r.payerId));
+          working = { base, env, path };
+          if (rows.length < 50) return found; // single-page result
           break;
         } catch (err) {
-          errors.push(err instanceof Error ? err.message : "request failed");
+          errors.push(
+            `${JSON.stringify(base)} @ ${env}${path}: ${
+              err instanceof Error ? err.message : "request failed"
+            }`
+          );
         }
       }
-      if (rows) break;
+      if (working) break;
     }
-    if (!rows) {
-      throw new AvailityError(`Availity configurations failed — ${errors.join(" · ")}`, 502);
-    }
+    if (working) break;
+  }
 
-    for (const r of rows) found.add(r.payerId);
+  if (!working) {
+    throw new AvailityError(
+      `Availity configurations failed — ${errors.join(" · ")}`,
+      502
+    );
+  }
+
+  // Page the rest with the variant that worked.
+  let offset = 50;
+  for (let page = 1; page < maxPages; page++) {
+    await new Promise((res) => setTimeout(res, spacing));
+    const rows = await configAttempt(
+      creds,
+      working.env,
+      working.path,
+      buildQuery(working.base, offset)
+    );
+    rows.forEach((r) => found.add(r.payerId));
     if (rows.length < 50) break;
     offset += 50;
-    await new Promise((res) => setTimeout(res, spacing));
   }
 
   return found;
