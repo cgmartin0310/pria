@@ -37,4 +37,10 @@ export const config = {
   cors: {
     origin: process.env["CORS_ORIGIN"] ?? "http://localhost:5173",
   },
+  /**
+   * Base64-encoded 32-byte key for encrypting stored credentials at rest
+   * (portal logins, clearinghouse secrets). Generate with:
+   *   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   */
+  encryptionKey: process.env["CREDENTIAL_ENCRYPTION_KEY"] ?? "",
 } as const;
