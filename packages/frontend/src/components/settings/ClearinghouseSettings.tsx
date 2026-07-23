@@ -59,13 +59,15 @@ function AddPayer({
       const res = await clearinghouseApi.syncDirectory(connectionId);
       const d = res.data;
       setSyncResult(
-        `Synced ${d.synced.toLocaleString()} payers · ` +
+        `Synced ${d.synced.toLocaleString()} payers` +
           (d.coverageError
-            ? "278 API coverage lookup failed"
-            : `${d.serviceReviewCapable.toLocaleString()} accept 278 prior auth via API (${
+            ? ` · 278 coverage lookup failed: ${d.coverageError}`
+            : ` · ${d.serviceReviewCapable.toLocaleString()} accept 278 prior auth via API (${
                 d.synced > 0 ? Math.round((d.serviceReviewCapable / d.synced) * 100) : 0
               }%)`) +
-          (d.truncated ? " · list truncated, re-run to continue" : "")
+          (d.truncated
+            ? " · directory is partial (rate-limited); coverage % is of what synced so far"
+            : "")
       );
       onChanged();
     } catch (e) {
