@@ -79,6 +79,21 @@ export async function portalRoutes(app: FastifyInstance) {
     }
   });
 
+  // Verify the stored authenticator seed produces the right code (admin)
+  app.get(
+    "/portals/connections/:id/totp-check",
+    { preHandler: requireRole("admin") },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      try {
+        const data = await portalService.checkTotp(req.auth.practiceId, id);
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    }
+  );
+
   // List portal submissions + their status
   app.get("/portals/submissions", async (req, reply) => {
     const data = await portalService.listSubmissions(req.auth.practiceId);

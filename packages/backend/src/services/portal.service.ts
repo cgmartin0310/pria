@@ -1,6 +1,7 @@
 import { eq, and, desc } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { encryptSecret, decryptSecret, encryptionAvailable } from "../lib/crypto.js";
+import { totp, totpSecondsRemaining } from "../lib/totp.js";
 import { portalSubmitQueue } from "../jobs/queue.js";
 import type {
   PortalCredentials,
@@ -233,6 +234,30 @@ export async function enqueuePortalSubmission(
   );
 
   return submission;
+}
+
+/**
+ * Generate the current TOTP for a connection so the user can confirm the stored
+ * seed matches their authenticator app before trusting unattended login.
+ */
+export async function checkTotp(practiceId: string, connectionId: string) {
+  const conn = await db.query.portalConnections.findFirst({
+    where: and(
+      eq(portalConnections.id, connectionId),
+      eq(portalConnections.practiceId, practiceId)
+    ),
+  });
+  if (!conn?.encryptedCredentials) {
+    throw new PortalError(404, "Connection not found");
+  }
+  const creds = JSON.parse(decryptSecret(conn.encryptedCredentials)) as PortalCredentials;
+  if (!creds.totpSeed) {
+    throw new PortalError(400, "No authenticator seed stored for this connection");
+  }
+  return {
+    code: totp(creds.totpSeed),
+    secondsRemaining: totpSecondsRemaining(),
+  };
 }
 
 export async function listSubmissions(practiceId: string) {
