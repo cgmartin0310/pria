@@ -36,6 +36,13 @@
       "when": 1784750000000,
       "tag": "0004_service_review_coverage",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784760000000,
+      "tag": "0005_portal_automation",
+      "breakpoints": true
     }
   ]
 }

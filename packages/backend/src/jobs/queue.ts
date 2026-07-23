@@ -2,6 +2,7 @@ import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { config } from "../config.js";
 import type { PASubmitJobData, PAStatusCheckJobData } from "../types/index.js";
+import type { PortalSubmitJobData } from "../services/portal-adapter.types.js";
 
 // ─── Redis Connection ─────────────────────────────────────────────────────────
 
@@ -31,17 +32,34 @@ export const paStatusQueue = new Queue<PAStatusCheckJobData>("pa-status", {
   },
 });
 
+/**
+ * Portal submissions consumed by the OpenClaw/agent worker pool. Kept as its
+ * own queue so the fleet scales on THIS queue's depth independent of EDI jobs.
+ */
+export const portalSubmitQueue = new Queue<PortalSubmitJobData>("portal-submit", {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 30_000 },
+    removeOnComplete: { count: 200 },
+    removeOnFail: { count: 1000 },
+  },
+});
+
 // ─── Queue Health ─────────────────────────────────────────────────────────────
 
 export async function getQueueHealth() {
-  const [submitCounts, statusCounts] = await Promise.all([
+  const [submitCounts, statusCounts, portalCounts] = await Promise.all([
     paSubmitQueue.getJobCounts("waiting", "active", "completed", "failed"),
     paStatusQueue.getJobCounts("waiting", "active", "completed", "failed"),
+    portalSubmitQueue.getJobCounts("waiting", "active", "completed", "failed"),
   ]);
 
   return {
     paSubmit: submitCounts,
     paStatus: statusCounts,
+    // The portal queue's "waiting" count is the autoscale signal for the fleet.
+    portalSubmit: portalCounts,
   };
 }
 
@@ -49,6 +67,7 @@ export async function closeQueues() {
   await Promise.all([
     paSubmitQueue.close(),
     paStatusQueue.close(),
+    portalSubmitQueue.close(),
     redisConnection.quit(),
   ]);
 }

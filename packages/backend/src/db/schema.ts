@@ -632,6 +632,94 @@ export const clearinghousePayerDirectory = pgTable(
   ]
 );
 
+// ─── Portal automation (agent-driven portal submission) ───────────────────────
+
+export const portalSubmissionStatusEnum = pgEnum("portal_submission_status", [
+  "queued", // waiting for a worker
+  "logging_in", // agent authenticating (may need MFA)
+  "needs_mfa", // paused: a human must supply an MFA code / device trust
+  "in_progress", // agent filling the portal form
+  "needs_human", // paused: unexpected screen / CAPTCHA / review needed
+  "submitted", // accepted by the portal (confirmation captured)
+  "failed", // gave up after retries
+]);
+
+/**
+ * A practice's connection to a web portal that has NO API (e.g. Availity
+ * Essentials). Holds ENCRYPTED credentials + a persisted, encrypted browser
+ * session so agents log in once and reuse the session across many auths.
+ */
+export const portalConnections = pgTable(
+  "portal_connections",
+  {
+    id: varchar("id", { length: 26 })
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    practiceId: varchar("practice_id", { length: 26 })
+      .notNull()
+      .references(() => practices.id, { onDelete: "cascade" }),
+    /** Which portal, e.g. 'availity_essentials'. */
+    portalKey: varchar("portal_key", { length: 50 }).notNull(),
+    label: varchar("label", { length: 255 }),
+    /** Encrypted JSON: { username, password, totpSeed? }. See lib/crypto. */
+    encryptedCredentials: text("encrypted_credentials"),
+    /** Encrypted browser storage state (cookies) so any worker can resume login. */
+    encryptedSession: text("encrypted_session"),
+    /** When the persisted session is expected to still be valid. */
+    sessionValidUntil: timestamp("session_valid_until"),
+    lastLoginAt: timestamp("last_login_at"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("portal_conn_practice_idx").on(t.practiceId),
+    uniqueIndex("portal_conn_unique_idx").on(t.practiceId, t.portalKey),
+  ]
+);
+
+/**
+ * One queued/attempted portal submission of an authorization. Workers pull
+ * these; humans resolve the paused ones (MFA / review).
+ */
+export const portalSubmissions = pgTable(
+  "portal_submissions",
+  {
+    id: varchar("id", { length: 26 })
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    practiceId: varchar("practice_id", { length: 26 })
+      .notNull()
+      .references(() => practices.id, { onDelete: "cascade" }),
+    authorizationId: varchar("authorization_id", { length: 26 })
+      .notNull()
+      .references(() => authorizations.id, { onDelete: "cascade" }),
+    portalConnectionId: varchar("portal_connection_id", { length: 26 })
+      .notNull()
+      .references(() => portalConnections.id, { onDelete: "cascade" }),
+    status: portalSubmissionStatusEnum("status").notNull().default("queued"),
+    /** Structured field values the agent enters (from the 278 assembler/mapper). */
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
+    /** Payer's confirmation/reference number once submitted. */
+    confirmationNumber: varchar("confirmation_number", { length: 100 }),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    /** Why a human is needed, when status is needs_mfa / needs_human. */
+    needsHumanReason: text("needs_human_reason"),
+    /** Which worker/agent picked it up (for debugging the pool). */
+    claimedBy: varchar("claimed_by", { length: 100 }),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("portal_sub_practice_idx").on(t.practiceId),
+    index("portal_sub_auth_idx").on(t.authorizationId),
+    index("portal_sub_status_idx").on(t.status),
+  ]
+);
+
 // ─── Relations ────────────────────────────────────────────────────────────────
 
 export const practiceRelations = relations(practices, ({ many }) => ({
