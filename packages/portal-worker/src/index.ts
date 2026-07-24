@@ -107,14 +107,28 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
         });
         break;
       case "needs_mfa":
-        await setStatus(portalSubmissionId, { status: "needs_mfa", needsHumanReason: outcome.reason });
+        await setStatus(portalSubmissionId, {
+          status: "needs_mfa",
+          needsHumanReason: outcome.reason,
+          pauseScreenshot: outcome.screenshot ?? null,
+        });
         break;
       case "needs_human":
-        await setStatus(portalSubmissionId, { status: "needs_human", needsHumanReason: outcome.reason });
+        await setStatus(portalSubmissionId, {
+          status: "needs_human",
+          needsHumanReason: outcome.reason,
+          pauseScreenshot: outcome.screenshot ?? null,
+        });
         break;
       case "failed":
-        await setStatus(portalSubmissionId, { status: "failed", lastError: outcome.error });
-        throw new Error(outcome.error); // let BullMQ retry per backoff
+        await setStatus(portalSubmissionId, {
+          status: "failed",
+          lastError: outcome.error,
+          pauseScreenshot: outcome.screenshot ?? null,
+        });
+        // No throw: the portal queue has attempts:1 by design (a died-mid-flow
+        // run may already have clicked submit) — retries are human-driven.
+        break;
     }
   },
   { connection, concurrency: config.concurrency }

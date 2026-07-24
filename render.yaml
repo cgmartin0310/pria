@@ -83,6 +83,35 @@ services:
         name: X-Content-Type-Options
         value: nosniff
 
+  # ── Portal Worker (agent fleet) ─────────────────────────────────────
+  # Replays learned recipes against payer portals. Chromium runs INSIDE this
+  # container (Playwright base image) — no external browser service, PHI stays
+  # in our infra. Scale the fleet by raising numInstances; the autoscale signal
+  # is the portal-submit queue's waiting count.
+  - type: worker
+    name: pria-portal-worker
+    runtime: docker
+    dockerfilePath: ./packages/portal-worker/Dockerfile
+    dockerContext: .
+    # Chromium needs headroom — starter (512MB) is too small.
+    plan: standard
+    region: ohio
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pria-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: pria-redis
+          type: redis
+          property: connectionString
+      # MUST be the same value as pria-api's key — decrypts stored logins.
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        sync: false
+      - key: WORKER_CONCURRENCY
+        value: "1"
+
   # ── Redis ────────────────────────────────────────────────────────────
   - type: redis
     name: pria-redis

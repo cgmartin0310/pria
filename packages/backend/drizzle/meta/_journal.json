@@ -57,6 +57,13 @@
       "when": 1784780000000,
       "tag": "0007_per_practice_payer_links",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784790000000,
+      "tag": "0008_pause_screenshot",
+      "breakpoints": true
     }
   ]
 }

@@ -49,6 +49,16 @@ function valueFor(
  * no longer matches (portal redesign), we DON'T crash: we hand off to the agent
  * fallback (stubbed below) and, failing that, pause for a human.
  */
+/** Best-effort JPEG snapshot so a paused submission shows WHAT the page looked like. */
+export async function snap(page: Page): Promise<string | undefined> {
+  try {
+    const buf = await page.screenshot({ type: "jpeg", quality: 50 });
+    return buf.toString("base64");
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runRecipe(
   page: Page,
   portalKey: string,
@@ -90,7 +100,11 @@ export async function runRecipe(
           break;
         }
         case "pauseForHuman":
-          return { kind: "needs_human", reason: step.reason };
+          return {
+            kind: "needs_human",
+            reason: step.reason,
+            screenshot: await snap(page),
+          };
         case "submit":
           await page.click(step.selector);
           break;
@@ -103,6 +117,7 @@ export async function runRecipe(
           reason:
             `Step '${step.action}' failed (selector may have changed): ` +
             (err instanceof Error ? err.message : String(err)),
+          screenshot: await snap(page),
         };
       }
     }

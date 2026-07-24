@@ -26,6 +26,7 @@ export const portalSubmissions = pgTable("portal_submissions", {
   attempts: integer("attempts").notNull().default(0),
   lastError: text("last_error"),
   needsHumanReason: text("needs_human_reason"),
+  pauseScreenshot: text("pause_screenshot"),
   claimedBy: varchar("claimed_by", { length: 100 }),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),

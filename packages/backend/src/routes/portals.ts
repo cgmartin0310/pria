@@ -105,6 +105,17 @@ export async function portalRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
 
+  // One submission with full detail (payload, pause screenshot)
+  app.get("/portals/submissions/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const data = await portalService.getSubmission(req.auth.practiceId, id);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(err, reply);
+    }
+  });
+
   // Re-queue a paused (needs_mfa / needs_human) or failed submission — the
   // human-handoff exit path.
   app.post("/portals/submissions/:id/retry", async (req, reply) => {

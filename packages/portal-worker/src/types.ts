@@ -43,6 +43,7 @@ export type RecipeStep =
 
 export type PortalOutcome =
   | { kind: "submitted"; confirmationNumber: string | null }
-  | { kind: "needs_mfa"; reason: string }
-  | { kind: "needs_human"; reason: string }
-  | { kind: "failed"; error: string };
+  /** screenshot: base64 JPEG of the page at the moment of the pause/failure. */
+  | { kind: "needs_mfa"; reason: string; screenshot?: string }
+  | { kind: "needs_human"; reason: string; screenshot?: string }
+  | { kind: "failed"; error: string; screenshot?: string };

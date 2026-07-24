@@ -261,11 +261,40 @@ export async function checkTotp(practiceId: string, connectionId: string) {
 }
 
 export async function listSubmissions(practiceId: string) {
+  // Heavy fields (payload, pause screenshot) are excluded from the list —
+  // fetch a single submission for those.
   return db.query.portalSubmissions.findMany({
+    columns: {
+      id: true,
+      authorizationId: true,
+      portalConnectionId: true,
+      status: true,
+      confirmationNumber: true,
+      attempts: true,
+      lastError: true,
+      needsHumanReason: true,
+      claimedBy: true,
+      startedAt: true,
+      completedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
     where: eq(portalSubmissions.practiceId, practiceId),
     orderBy: [desc(portalSubmissions.createdAt)],
     limit: 100,
   });
+}
+
+/** Full detail for one submission, including the pause screenshot. */
+export async function getSubmission(practiceId: string, submissionId: string) {
+  const row = await db.query.portalSubmissions.findFirst({
+    where: and(
+      eq(portalSubmissions.id, submissionId),
+      eq(portalSubmissions.practiceId, practiceId)
+    ),
+  });
+  if (!row) throw new PortalError(404, "Submission not found");
+  return row;
 }
 
 /**

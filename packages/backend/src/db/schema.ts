@@ -722,6 +722,8 @@ export const portalSubmissions = pgTable(
     lastError: text("last_error"),
     /** Why a human is needed, when status is needs_mfa / needs_human. */
     needsHumanReason: text("needs_human_reason"),
+    /** Base64 JPEG of the portal page at the moment of pause/failure. */
+    pauseScreenshot: text("pause_screenshot"),
     /** Which worker/agent picked it up (for debugging the pool). */
     claimedBy: varchar("claimed_by", { length: 100 }),
     startedAt: timestamp("started_at"),

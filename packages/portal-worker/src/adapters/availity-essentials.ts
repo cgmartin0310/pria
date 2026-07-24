@@ -1,7 +1,7 @@
 import { chromium, type Browser, type BrowserContext } from "playwright-core";
 import { config } from "../config.js";
 import { totp } from "../totp.js";
-import { runRecipe } from "../recipe-engine.js";
+import { runRecipe, snap } from "../recipe-engine.js";
 import type {
   PortalCredentials,
   PortalOutcome,
@@ -33,11 +33,12 @@ const SEL = {
 
 async function connectBrowser(): Promise<Browser> {
   if (config.browserWsEndpoint) {
-    // Production: connect to a remote Chromium (VM or hosted browser) over CDP.
+    // Remote Chromium (hosted browser / separate VM) over CDP — e.g. Steel.
     return chromium.connectOverCDP(config.browserWsEndpoint);
   }
-  // Local dev only: requires a system Chrome (playwright-core bundles none).
-  return chromium.launch({ channel: "chrome", headless: true });
+  // Default deploy: Chromium bundled in this container by the Playwright base
+  // image (tag pinned to the playwright-core version so resolution works).
+  return chromium.launch({ headless: true });
 }
 
 /** Is the current context already authenticated on Essentials? */
@@ -76,13 +77,25 @@ async function login(
   const mfa = await page.$(SEL.mfaCodeInput);
   if (mfa) {
     if (!creds.totpSeed) {
-      return { kind: "needs_mfa", reason: "MFA required and no authenticator seed is stored" };
+      return {
+        kind: "needs_mfa",
+        reason: "MFA required and no authenticator seed is stored",
+        screenshot: await snap(page),
+      };
     }
     await page.fill(SEL.mfaCodeInput, totp(creds.totpSeed));
     await page.click(SEL.mfaSubmit);
   }
 
-  await page.waitForSelector(SEL.loggedInMarker, { timeout: 20_000 });
+  try {
+    await page.waitForSelector(SEL.loggedInMarker, { timeout: 20_000 });
+  } catch {
+    return {
+      kind: "needs_human",
+      reason: "Login did not reach the signed-in state (unexpected screen?)",
+      screenshot: await snap(page),
+    };
+  }
   return null;
 }
 

@@ -1,0 +1,1 @@
+ALTER TABLE "portal_submissions" ADD COLUMN "pause_screenshot" text;
