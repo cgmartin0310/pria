@@ -138,21 +138,40 @@ export async function submitAuthorization(
     throw new Error(`Cannot submit authorization in ${auth.status} status`);
   }
 
-  // Queue the EDI submission job
-  await paSubmitQueue.add(
-    "pa-submit",
-    { authorizationId, practiceId },
-    { attempts: 3, backoff: { type: "exponential", delay: 5000 } }
-  );
-
-  // Update status to submitted
+  // Mark submitted BEFORE queueing: a fast worker (Test Mode decides instantly)
+  // could otherwise apply the decision first and have it stomped back to
+  // "submitted" by this update. The status guard also makes double-submits
+  // idempotent under concurrency.
   const [updated] = await db
     .update(authorizations)
     .set({ status: "submitted", submittedAt: new Date(), updatedAt: new Date() })
     .where(
-      and(eq(authorizations.id, authorizationId), eq(authorizations.practiceId, practiceId))
+      and(
+        eq(authorizations.id, authorizationId),
+        eq(authorizations.practiceId, practiceId),
+        eq(authorizations.status, "draft")
+      )
     )
     .returning();
+
+  if (!updated) {
+    throw new Error("Authorization was already submitted");
+  }
+
+  try {
+    await paSubmitQueue.add(
+      "pa-submit",
+      { authorizationId, practiceId },
+      { attempts: 3, backoff: { type: "exponential", delay: 5000 } }
+    );
+  } catch (queueErr) {
+    // Couldn't queue — revert so the user can retry rather than strand it.
+    await db
+      .update(authorizations)
+      .set({ status: "draft", submittedAt: null, updatedAt: new Date() })
+      .where(eq(authorizations.id, authorizationId));
+    throw queueErr;
+  }
 
   await recordHistory({
     authorizationId,

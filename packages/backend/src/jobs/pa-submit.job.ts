@@ -167,6 +167,16 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
 
     // ── Availity: submit as a Service Review (structured JSON, not raw X12) ──
     if (routing.clearinghouseKey === "availity") {
+      // Idempotency: if a prior attempt already submitted (id recorded), do NOT
+      // submit again on a BullMQ retry — that would file a duplicate 278.
+      if (auth.clearinghouseSubmissionId) {
+        console.warn(
+          `[pa-submit] Auth ${authorizationId} already submitted to Availity ` +
+            `(${auth.clearinghouseSubmissionId}) — skipping duplicate submission`
+        );
+        return;
+      }
+
       const creds = routing.credentials ?? {};
       if (!creds.clientId || !creds.clientSecret) {
         throw new Error("Availity connection is missing credentials");
@@ -191,6 +201,9 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
       // already be present (A1 certified / A3 denied / A4 pended).
       const terminal = result.statusCode === "A1" || result.statusCode === "A3";
 
+      // From here on the submission HAS happened — record-keeping failures must
+      // not throw, or BullMQ would retry the job and file a duplicate 278.
+      try {
       await db
         .update(authorizations)
         .set({
@@ -236,6 +249,14 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
         notes,
         performedBy: "system",
       });
+      } catch (recordErr) {
+        console.error(
+          `[pa-submit] Submission to Availity SUCCEEDED for auth ${authorizationId} ` +
+            `(service review ${result.id ?? "unknown"}) but recording it failed — ` +
+            `NOT retrying to avoid a duplicate submission:`,
+          recordErr instanceof Error ? recordErr.message : recordErr
+        );
+      }
 
       console.log(
         `[pa-submit] Availity service review ${result.id ?? "(no id)"} → ${result.status ?? "accepted"}`

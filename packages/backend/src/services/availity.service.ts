@@ -99,6 +99,13 @@ async function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<
  * Exchange client credentials for a bearer access token.
  * Throws AvailityError with a helpful message if the credentials are rejected.
  */
+/**
+ * Token cache: Availity tokens live 5 minutes and every API call previously
+ * fetched a fresh one — doubling request volume and blowing the 5 req/s limit
+ * during directory syncs. Cached for 4 minutes, keyed by client+env+scope.
+ */
+const tokenCache = new Map<string, { token: string; expiresAt: number }>();
+
 export async function getToken(
   creds: AvailityCredentials,
   envOverride?: AvailityEnvironment
@@ -115,6 +122,10 @@ export async function getToken(
   const env: AvailityEnvironment =
     envOverride ?? creds.environment ?? (creds.demo ? "test" : "production");
   const tokenUrl = `${baseFor(env)}${TOKEN_PATH}`;
+
+  const cacheKey = `${creds.clientId}|${env}|${creds.scope ?? ""}`;
+  const cached = tokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.token;
 
   return withTimeout(async (signal) => {
     const res = await fetch(tokenUrl, {
@@ -136,6 +147,11 @@ export async function getToken(
       throw new AvailityError(`Availity token request failed: ${detail}`, 400);
     }
 
+    // Tokens are valid 5 min; cache for 4 to leave headroom for in-flight use.
+    tokenCache.set(cacheKey, {
+      token: json.access_token,
+      expiresAt: Date.now() + 4 * 60_000,
+    });
     return json.access_token;
   });
 }
@@ -492,6 +508,9 @@ const SERVICE_REVIEW_PATHS = [
   "/availity/v2/service-reviews",
 ];
 
+/** Working Service Reviews path per environment, learned on first success. */
+const serviceReviewPathCache = new Map<AvailityEnvironment, string>();
+
 export interface ServiceReviewResult {
   httpStatus: number;
   /** Availity's service review id (used to poll for the decision). */
@@ -635,16 +654,38 @@ async function serviceReviewRequest(
     primary === "test" ? ["test", "production"] : ["production", "test"];
 
   const errors: string[] = [];
-  // Try every host+path combination before giving up. Previously a 4xx on the
-  // FIRST path short-circuited, so the correct path was never attempted — which
-  // is exactly how a gateway error on a wrong path masqueraded as a real
-  // validation failure.
   let firstClientError: AvailityError | null = null;
 
-  for (const env of order) {
-    for (const path of SERVICE_REVIEW_PATHS) {
+  // Once a path works for an environment, go straight to it next time — the
+  // fallback sweep is for discovery, not for every call.
+  const pathsFor = (env: AvailityEnvironment): string[] => {
+    const hit = serviceReviewPathCache.get(env);
+    return hit
+      ? [hit, ...SERVICE_REVIEW_PATHS.filter((p) => p !== hit)]
+      : [...SERVICE_REVIEW_PATHS];
+  };
+
+  /**
+   * POST safety: a POST may have been ACCEPTED server-side even when the client
+   * sees an error (timeout while reading the response, 5xx after commit). For
+   * POSTs we only fall through to the next host/path when the failure proves
+   * the request never reached the API: a 404 (wrong route at the gateway) or a
+   * pre-response network error. Anything else throws immediately — retrying
+   * could file the same prior authorization twice.
+   */
+  const safeToTryNext = (err: unknown): boolean => {
+    if (init.method !== "POST") return true;
+    if (err instanceof AvailityError && err.statusCode === 404) return true;
+    if (!(err instanceof AvailityError) && err instanceof TypeError) return true; // fetch failed pre-send
+    return false;
+  };
+
+  outer: for (const env of order) {
+    for (const path of pathsFor(env)) {
       try {
-        return await serviceReviewAttempt(creds, env, path, init, scenarioId);
+        const result = await serviceReviewAttempt(creds, env, path, init, scenarioId);
+        serviceReviewPathCache.set(env, path);
+        return result;
       } catch (err) {
         if (
           err instanceof AvailityError &&
@@ -657,6 +698,9 @@ async function serviceReviewRequest(
         errors.push(
           `${env}${path}: ${err instanceof Error ? err.message : "request failed"}`
         );
+        if (!safeToTryNext(err)) break outer;
+        // Space fallback attempts so discovery never bursts the rate limit.
+        await new Promise((r) => setTimeout(r, 220));
       }
     }
   }

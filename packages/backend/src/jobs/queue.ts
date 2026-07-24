@@ -39,8 +39,11 @@ export const paStatusQueue = new Queue<PAStatusCheckJobData>("pa-status", {
 export const portalSubmitQueue = new Queue<PortalSubmitJobData>("portal-submit", {
   connection: redisConnection,
   defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: "exponential", delay: 30_000 },
+    // NO automatic retries: a portal run that died mid-flow may already have
+    // clicked submit, and replaying the recipe blind could file the auth twice.
+    // Failed/paused submissions are retried deliberately by a human via
+    // POST /portals/submissions/:id/retry.
+    attempts: 1,
     removeOnComplete: { count: 200 },
     removeOnFail: { count: 1000 },
   },

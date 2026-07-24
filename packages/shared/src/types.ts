@@ -663,6 +663,8 @@ export interface X12278Request {
     endDate?: string;              // DTP
     onsetDate?: string;            // DTP
     visitPattern?: VisitPattern;   // HSD
+    /** Fallback total visits when no structured visitPattern is set (HSD*VS). */
+    requestedVisits?: number;
     previousAuthNumber?: string;   // REF
     clinicalNotes?: string;        // MSG
   };
@@ -713,6 +715,8 @@ export interface X12278Response {
   message: string;
   certificationPeriodStart?: string;
   certificationPeriodEnd?: string;
+  /** Certified visit count when the response carries an HSD*VS segment. */
+  certifiedVisits?: number;
   rawSegments: string[];
 }
 

@@ -366,6 +366,14 @@ export function generateX278Request(request: X12278Request): string {
       vp.totalDurationDays ? "35" : "", // HSD05: time period qualifier
       vp.totalDurationDays || ""        // HSD06: total duration days
     ));
+  } else if (
+    request.authRequest.requestedVisits &&
+    request.authRequest.requestedVisits > 0
+  ) {
+    // Fallback: no structured pattern, but a total visit count was requested.
+    // Without this, the common create-form path (requestedVisits only) sent
+    // authorizations with NO quantity at all.
+    add(seg("HSD", "VS", request.authRequest.requestedVisits));
   }
 
   // REF — Previous Authorization Number (qualifier 9F = Prior Authorization Number)
@@ -572,6 +580,19 @@ export function parseX278Response(rawEdi: string): X12278Response {
     }
   }
 
+  // ── HSD — Certified visit count (HSD*VS*n), when the payer returns one ────
+  // Critical for A2 (modified) decisions: the payer may certify FEWER visits
+  // than requested, and without this the record looks fully approved.
+  let certifiedVisits: number | undefined;
+  const hsdSeg = rawSegments.find((s) => s.startsWith("HSD*"));
+  if (hsdSeg) {
+    const parts = hsdSeg.split("*");
+    if (parts[1] === "VS") {
+      const n = parseInt(parts[2] ?? "", 10);
+      if (Number.isFinite(n) && n > 0) certifiedVisits = n;
+    }
+  }
+
   // ── AAA — Request Validation (error) ─────────────────────────────────────
   if (status === "pending" && !hcrSeg) {
     const aaaSeg = rawSegments.find((s) => s.startsWith("AAA*"));
@@ -594,6 +615,7 @@ export function parseX278Response(rawEdi: string): X12278Response {
     message,
     certificationPeriodStart,
     certificationPeriodEnd,
+    certifiedVisits,
     rawSegments,
   };
 }

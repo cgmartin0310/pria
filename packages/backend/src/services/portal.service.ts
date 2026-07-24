@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { encryptSecret, decryptSecret, encryptionAvailable } from "../lib/crypto.js";
 import { totp, totpSecondsRemaining } from "../lib/totp.js";
@@ -266,4 +266,45 @@ export async function listSubmissions(practiceId: string) {
     orderBy: [desc(portalSubmissions.createdAt)],
     limit: 100,
   });
+}
+
+/**
+ * Re-queue a paused or failed submission. This is the exit from the
+ * needs_mfa / needs_human states — after a human resolves whatever paused it
+ * (adds a TOTP seed, reviews the portal, fixes data), retry puts it back on
+ * the queue for the worker pool.
+ */
+export async function retrySubmission(practiceId: string, submissionId: string) {
+  const [updated] = await db
+    .update(portalSubmissions)
+    .set({
+      status: "queued",
+      needsHumanReason: null,
+      lastError: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(portalSubmissions.id, submissionId),
+        eq(portalSubmissions.practiceId, practiceId),
+        inArray(portalSubmissions.status, ["needs_mfa", "needs_human", "failed"])
+      )
+    )
+    .returning();
+
+  if (!updated) {
+    throw new PortalError(
+      404,
+      "Submission not found, or it isn't in a retryable state"
+    );
+  }
+
+  // Fresh jobId — the original (submission.id) may still exist in BullMQ's
+  // completed set, which would silently dedupe a re-add.
+  await portalSubmitQueue.add("portal-submit", {
+    portalSubmissionId: updated.id,
+    practiceId,
+  });
+
+  return updated;
 }

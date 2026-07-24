@@ -91,6 +91,9 @@ export async function applyX278Response(
   if (certStart) updates.certificationPeriodStart = certStart;
   if (certEnd) updates.certificationPeriodEnd = certEnd;
   if (expiresAt) updates.expiresAt = expiresAt;
+  // A2 (modified) may certify fewer visits than requested — record the number
+  // when the response carries it so "approved" isn't silently overstated.
+  if (parsed.certifiedVisits) updates.approvedVisits = parsed.certifiedVisits;
 
   await db
     .update(authorizations)

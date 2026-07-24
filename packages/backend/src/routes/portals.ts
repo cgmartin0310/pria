@@ -105,6 +105,18 @@ export async function portalRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
 
+  // Re-queue a paused (needs_mfa / needs_human) or failed submission — the
+  // human-handoff exit path.
+  app.post("/portals/submissions/:id/retry", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const data = await portalService.retrySubmission(req.auth.practiceId, id);
+      return reply.status(202).send({ data });
+    } catch (err) {
+      return handleError(err, reply);
+    }
+  });
+
   // ── Recipes (learned portal workflows) ────────────────────────────────────
   // Recipes are GLOBAL: every tenant's worker replays the active one, with live
   // PHI bound into its steps. Writing them is therefore PLATFORM-admin only

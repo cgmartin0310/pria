@@ -299,6 +299,7 @@ export async function assembleX278Request(
       endDate: auth.endDate ?? undefined,
       onsetDate: auth.onsetDate ?? undefined,
       visitPattern: auth.visitPattern ?? undefined,
+      requestedVisits: auth.requestedVisits ?? undefined,
       previousAuthNumber: auth.previousAuthNumber ?? undefined,
       clinicalNotes: auth.clinicalNotes ?? undefined,
     },

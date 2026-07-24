@@ -111,14 +111,15 @@ export function toServiceReview(
     toDate: asDate(authRequest.endDate),
   };
 
-  // Requested visits → quantity (VS = visits).
-  if (authRequest.visitPattern) {
-    const vp = authRequest.visitPattern;
-    const total = vp.visitsPerPeriod * vp.periodCount;
-    if (total > 0) {
-      serviceReview["quantity"] = String(total);
-      serviceReview["quantityTypeCode"] = "VS";
-    }
+  // Requested visits → quantity (VS = visits). Prefer the structured pattern's
+  // total; fall back to the flat requestedVisits so the common create-form path
+  // never submits without a visit count.
+  const totalVisits = authRequest.visitPattern
+    ? authRequest.visitPattern.visitsPerPeriod * authRequest.visitPattern.periodCount
+    : (authRequest.requestedVisits ?? 0);
+  if (totalVisits > 0) {
+    serviceReview["quantity"] = String(totalVisits);
+    serviceReview["quantityTypeCode"] = "VS";
   }
 
   // CPT/HCPCS lines (HC qualifier).
