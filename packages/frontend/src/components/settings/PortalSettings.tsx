@@ -4,7 +4,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { useAuth } from "@/hooks/useAuth.js";
-import { portalApi, type PortalConnection } from "@/lib/api.js";
+import {
+  portalApi,
+  type PortalConnection,
+  type PortalRecipeSummary,
+} from "@/lib/api.js";
 
 function formatDate(d: string | null): string {
   if (!d) return "never";
@@ -224,6 +228,161 @@ function ConnectForm({
   );
 }
 
+/**
+ * Recipe manager — the learned portal workflows the worker replays. Writing
+ * requires PLATFORM admin (PLATFORM_ADMIN_EMAILS); others see the list only.
+ */
+function RecipeManager() {
+  const [recipes, setRecipes] = useState<PortalRecipeSummary[]>([]);
+  const [name, setName] = useState("");
+  const [stepsJson, setStepsJson] = useState("");
+  const [activate, setActivate] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const load = useCallback(() => {
+    portalApi
+      .recipes()
+      .then((res) => setRecipes(res.data ?? []))
+      .catch(() => setRecipes([]));
+  }, []);
+
+  useEffect(() => load(), [load]);
+
+  const handleSave = async () => {
+    setError(null);
+    setSaved(false);
+
+    let steps: unknown[];
+    try {
+      steps = JSON.parse(stepsJson);
+      if (!Array.isArray(steps) || steps.length === 0) {
+        throw new Error("not an array");
+      }
+    } catch {
+      setError("Steps must be a JSON array of recipe steps.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await portalApi.createRecipe({
+        portalKey: "availity_essentials",
+        name: name.trim() || "Availity Essentials auth",
+        steps,
+        activate,
+      });
+      setStepsJson("");
+      setName("");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      load();
+    } catch (e) {
+      setError(
+        (e as { message?: string })?.message ??
+          "Couldn't save (platform admin access required)."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleActivate = async (id: string) => {
+    try {
+      await portalApi.activateRecipe(id);
+      load();
+    } catch (e) {
+      setError((e as { message?: string })?.message ?? "Couldn't activate.");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <h3 className="font-medium text-slate-900">Portal Recipes</h3>
+        <p className="text-sm text-slate-500">
+          The learned steps the agent replays to file an auth. Managed by
+          platform administrators.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {recipes.length > 0 ? (
+          <div className="divide-y divide-slate-100 rounded-md border border-slate-200">
+            {recipes.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between px-3 py-2"
+              >
+                <div>
+                  <p className="text-sm text-slate-800">
+                    {r.name}{" "}
+                    <span className="font-mono text-xs text-slate-400">
+                      v{r.version} · {r.stepCount} steps · {r.portalKey}
+                    </span>
+                  </p>
+                </div>
+                {r.isActive ? (
+                  <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                    Active
+                  </span>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleActivate(r.id)}
+                  >
+                    Activate
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">
+            No recipes yet — the agent can't file until one is recorded and
+            activated.
+          </p>
+        )}
+
+        <div className="space-y-3 border-t border-slate-100 pt-4">
+          <Input
+            placeholder="Recipe name (e.g. Availity auth form v1)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <textarea
+            className="min-h-[140px] w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            placeholder='Paste recipe steps JSON, e.g. [{"action":"navigate","url":"https://apps.availity.com/..."}, {"action":"type","selector":"#memberId","binding":"patient.memberId"}]'
+            value={stepsJson}
+            onChange={(e) => setStepsJson(e.target.value)}
+          />
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={activate}
+                onChange={(e) => setActivate(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600"
+              />
+              Activate on save
+            </label>
+            <Button onClick={handleSave} disabled={saving || !stepsJson.trim()}>
+              {saving ? "Saving…" : "Save recipe"}
+            </Button>
+          </div>
+          {saved && (
+            <p className="flex items-center gap-1 text-sm text-green-600">
+              <Check className="h-4 w-4" /> Recipe saved
+            </p>
+          )}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function PortalSettings() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -252,6 +411,8 @@ export function PortalSettings() {
         For payers that only accept prior auth through a web portal, Pria's agents
         submit on your behalf using the login you store here.
       </div>
+
+      <RecipeManager />
 
       <Card>
         <CardHeader>

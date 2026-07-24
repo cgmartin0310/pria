@@ -8,6 +8,7 @@ import {
   Building2,
   Settings,
   Zap,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils.js";
 import { useAuth } from "@/hooks/useAuth.js";
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { label: "Providers", to: "/providers", icon: Stethoscope },
   { label: "Authorizations", to: "/authorizations", icon: FileText },
   { label: "New Authorization", to: "/authorizations/new", icon: PlusCircle },
+  { label: "Portal Queue", to: "/portal-queue", icon: Bot },
   { label: "Settings", to: "/settings", icon: Settings },
 ];
 

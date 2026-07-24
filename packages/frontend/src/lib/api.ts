@@ -308,8 +308,63 @@ export const portalApi = {
       `/portals/connections/${id}/totp-check`
     ),
   submissions: () =>
-    api.get<ApiResponse<unknown[]>>("/portals/submissions"),
+    api.get<ApiResponse<PortalSubmission[]>>("/portals/submissions"),
+  submission: (id: string) =>
+    api.get<ApiResponse<PortalSubmissionDetail>>(`/portals/submissions/${id}`),
+  retrySubmission: (id: string) =>
+    api.post<ApiResponse<PortalSubmission>>(`/portals/submissions/${id}/retry`),
+  recipes: () => api.get<ApiResponse<PortalRecipeSummary[]>>("/portals/recipes"),
+  createRecipe: (data: {
+    portalKey: string;
+    name: string;
+    steps: unknown[];
+    activate?: boolean;
+  }) => api.post<ApiResponse<PortalRecipeSummary>>("/portals/recipes", data),
+  activateRecipe: (id: string) =>
+    api.post<ApiResponse<{ activated: string }>>(
+      `/portals/recipes/${id}/activate`
+    ),
 };
+
+export type PortalSubmissionStatus =
+  | "queued"
+  | "logging_in"
+  | "needs_mfa"
+  | "in_progress"
+  | "needs_human"
+  | "submitted"
+  | "failed";
+
+export interface PortalSubmission {
+  id: string;
+  authorizationId: string;
+  portalConnectionId: string;
+  status: PortalSubmissionStatus;
+  confirmationNumber: string | null;
+  attempts: number;
+  lastError: string | null;
+  needsHumanReason: string | null;
+  claimedBy: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PortalSubmissionDetail extends PortalSubmission {
+  payload: Record<string, unknown> | null;
+  pauseScreenshot: string | null;
+}
+
+export interface PortalRecipeSummary {
+  id: string;
+  portalKey: string;
+  name: string;
+  version: number;
+  stepCount: number;
+  isActive: boolean;
+  createdAt: string;
+}
 
 export interface Icd10Result {
   code: string;
