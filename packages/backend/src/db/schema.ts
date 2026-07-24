@@ -720,6 +720,34 @@ export const portalSubmissions = pgTable(
   ]
 );
 
+/**
+ * A learned, replayable workflow for driving one portal ("teach-by-demo").
+ * GLOBAL, not per-practice: record Availity Essentials once and every clinic
+ * uses it. Versioned so a portal redesign can be re-recorded without losing the
+ * prior recipe. Steps are stored as a flexible JSON array (see RecipeStep).
+ */
+export const portalRecipes = pgTable(
+  "portal_recipes",
+  {
+    id: varchar("id", { length: 26 })
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    portalKey: varchar("portal_key", { length: 50 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    version: integer("version").notNull().default(1),
+    steps: jsonb("steps").notNull().$type<unknown[]>().default([]),
+    /** Only one active recipe per portalKey is used by the worker. */
+    isActive: boolean("is_active").notNull().default(false),
+    createdBy: varchar("created_by", { length: 255 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("portal_recipes_portal_idx").on(t.portalKey),
+    uniqueIndex("portal_recipes_version_idx").on(t.portalKey, t.version),
+  ]
+);
+
 // ─── Relations ────────────────────────────────────────────────────────────────
 
 export const practiceRelations = relations(practices, ({ many }) => ({

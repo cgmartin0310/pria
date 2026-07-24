@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import * as portalService from "../services/portal.service.js";
 import { PortalError } from "../services/portal.service.js";
+import * as recipeService from "../services/portal-recipe.service.js";
+import type { RecipeStep } from "../services/portal-recipe.types.js";
 import { requireRole } from "../auth/tenant.js";
 
 const connectSchema = z.object({
@@ -99,4 +101,61 @@ export async function portalRoutes(app: FastifyInstance) {
     const data = await portalService.listSubmissions(req.auth.practiceId);
     return reply.send({ data });
   });
+
+  // ── Recipes (learned portal workflows; global, admin-managed) ─────────────
+
+  const recipeSchema = z.object({
+    portalKey: z.string().min(1),
+    name: z.string().min(1).max(255),
+    steps: z.array(z.record(z.unknown())).min(1),
+    activate: z.boolean().optional(),
+  });
+
+  app.get("/portals/recipes", async (req, reply) => {
+    const portalKey = (req.query as Record<string, string>)["portalKey"];
+    const data = await recipeService.listRecipes(portalKey);
+    return reply.send({ data });
+  });
+
+  app.post(
+    "/portals/recipes",
+    { preHandler: requireRole("admin") },
+    async (req, reply) => {
+      const parsed = recipeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "VALIDATION_ERROR",
+          message: "Invalid recipe",
+          statusCode: 400,
+          details: parsed.error.flatten(),
+        });
+      }
+      try {
+        const row = await recipeService.createRecipe({
+          portalKey: parsed.data.portalKey,
+          name: parsed.data.name,
+          steps: parsed.data.steps as unknown as RecipeStep[],
+          activate: parsed.data.activate,
+          createdBy: req.auth.email,
+        });
+        return reply.status(201).send({ data: row });
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    }
+  );
+
+  app.post(
+    "/portals/recipes/:id/activate",
+    { preHandler: requireRole("admin") },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      try {
+        const data = await recipeService.activateRecipe(id);
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    }
+  );
 }
