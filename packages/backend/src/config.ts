@@ -43,4 +43,13 @@ export const config = {
    *   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    */
   encryptionKey: process.env["CREDENTIAL_ENCRYPTION_KEY"] ?? "",
+  /**
+   * Comma-separated emails allowed to manage PLATFORM-level resources that
+   * affect every tenant (portal recipes). Practice admins are NOT sufficient —
+   * any signup gets practice-admin. Empty list = nobody (fail closed).
+   */
+  platformAdminEmails: (process.env["PLATFORM_ADMIN_EMAILS"] ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
 } as const;

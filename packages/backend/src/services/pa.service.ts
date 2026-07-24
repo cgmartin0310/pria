@@ -83,6 +83,20 @@ export async function createAuthorization(
     clinicalSummary?: string;
   }
 ) {
+  // Tenant check: the patient must belong to THIS practice. Without this, a
+  // caller could reference another practice's patient id and every downstream
+  // reader (get/preview/submit) would join — and transmit — that patient's PHI.
+  const patient = await db.query.patients.findFirst({
+    columns: { id: true },
+    where: and(
+      eq(patients.id, data.patientId),
+      eq(patients.practiceId, practiceId)
+    ),
+  });
+  if (!patient) {
+    throw new Error("Patient not found");
+  }
+
   const [auth] = await db
     .insert(authorizations)
     .values({

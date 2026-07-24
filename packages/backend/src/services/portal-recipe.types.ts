@@ -59,3 +59,28 @@ export interface PortalRecipe {
   version: number;
   steps: RecipeStep[];
 }
+
+/**
+ * Hosts a recipe's `navigate` steps may target, per portal. Recipes execute in
+ * an authenticated browser with live PHI bound into their steps, so navigation
+ * anywhere else is an exfiltration vector — validated at save AND at replay.
+ * A hostname matches if it equals an entry or is a subdomain of one.
+ */
+export const PORTAL_ALLOWED_HOSTS: Record<string, string[]> = {
+  availity_essentials: ["availity.com"],
+};
+
+/** True when `url` is https and its host is allowed for this portal. */
+export function isAllowedRecipeUrl(portalKey: string, url: string): boolean {
+  const hosts = PORTAL_ALLOWED_HOSTS[portalKey];
+  if (!hosts || hosts.length === 0) return false;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    return hosts.some(
+      (h) => u.hostname === h || u.hostname.endsWith(`.${h}`)
+    );
+  } catch {
+    return false;
+  }
+}

@@ -526,16 +526,20 @@ export const practiceClearinghouses = pgTable(
       .references(() => clearinghouses.id),
     label: varchar("label", { length: 255 }),
     /**
-     * API credentials for the clearinghouse. For Claim.MD: { accountKey }.
-     * NOTE: stored as-is for MVP — encrypt at rest before production PHI use.
-     * Never returned to the frontend (masked in responses).
+     * API credentials for the clearinghouse.
+     * New writes store `{ enc: "<AES-256-GCM token>" }` — the encrypted JSON of
+     * the fields below (see lib/crypto). Legacy rows may still hold the fields
+     * in plaintext; readers must go through decryptChCredentials(), which
+     * handles both shapes. Never returned to the frontend (masked).
      */
     credentials: jsonb("credentials")
       .notNull()
       .$type<{
-        /** Claim.MD-style single key (legacy). */
+        /** Encrypted form: AES-256-GCM token of the JSON credentials. */
+        enc?: string;
+        /** Claim.MD-style single key (legacy plaintext). */
         accountKey?: string;
-        /** Availity OAuth2 client credentials. */
+        /** Availity OAuth2 client credentials (legacy plaintext). */
         clientId?: string;
         clientSecret?: string;
         scope?: string;
@@ -559,9 +563,11 @@ export const practiceClearinghouses = pgTable(
 );
 
 /**
- * The payer directory for a clearinghouse: which payers it reaches, the payer's
- * ID as known by that clearinghouse, and capability flags. Global per
- * clearinghouse (Claim.MD's network is the same for everyone).
+ * A practice's chosen payers, linked through a clearinghouse: which payers THIS
+ * practice works with, the payer's ID as known by that clearinghouse, and
+ * capability flags. Per-practice (originally global, which let one tenant's
+ * adds/overrides affect every other — see migration 0007). The full network
+ * directory lives separately in clearinghouse_payer_directory.
  */
 export const clearinghousePayers = pgTable(
   "clearinghouse_payers",
@@ -569,6 +575,11 @@ export const clearinghousePayers = pgTable(
     id: varchar("id", { length: 26 })
       .primaryKey()
       .$defaultFn(() => createId()),
+    /** Owning practice. Legacy pre-0007 rows are null and invisible to all. */
+    practiceId: varchar("practice_id", { length: 26 }).references(
+      () => practices.id,
+      { onDelete: "cascade" }
+    ),
     clearinghouseId: varchar("clearinghouse_id", { length: 26 })
       .notNull()
       .references(() => clearinghouses.id, { onDelete: "cascade" }),
@@ -591,7 +602,12 @@ export const clearinghousePayers = pgTable(
   (t) => [
     index("ch_payers_ch_idx").on(t.clearinghouseId),
     index("ch_payers_payer_idx").on(t.payerId),
-    uniqueIndex("ch_payers_unique_idx").on(t.clearinghouseId, t.payerId),
+    index("ch_payers_practice_idx").on(t.practiceId),
+    uniqueIndex("ch_payers_practice_unique_idx").on(
+      t.practiceId,
+      t.clearinghouseId,
+      t.payerId
+    ),
   ]
 );
 

@@ -1,7 +1,12 @@
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import * as claimmd from "./claimmd.service.js";
 import * as availity from "./availity.service.js";
+import {
+  encryptSecret,
+  decryptSecret,
+  encryptionAvailable,
+} from "../lib/crypto.js";
 
 /** Credentials accepted when connecting a clearinghouse. */
 export interface ConnectCredentials {
@@ -12,6 +17,25 @@ export interface ConnectCredentials {
   environment?: "production" | "test";
   /** Test Mode only. */
   simulatedDecision?: "A1" | "A3" | "A4";
+  accountKey?: string;
+}
+
+type StoredCredentials = ConnectCredentials & { enc?: string };
+
+/**
+ * Read a connection's credentials, handling both storage shapes: new rows hold
+ * `{ enc: <AES-256-GCM token> }`; legacy rows hold the fields in plaintext.
+ * Decryption failures throw — better loud than silently unauthenticated.
+ */
+export function decryptChCredentials(
+  raw: StoredCredentials | null | undefined
+): ConnectCredentials {
+  if (!raw) return {};
+  if (raw.enc) {
+    return JSON.parse(decryptSecret(raw.enc)) as ConnectCredentials;
+  }
+  const { enc: _enc, ...legacy } = raw;
+  return legacy;
 }
 
 const {
@@ -56,30 +80,39 @@ export async function listConnections(practiceId: string) {
     orderBy: (c, { desc }) => [desc(c.createdAt)],
   });
 
-  // Count linked payers per clearinghouse (directory is shared per clearinghouse).
+  // Count THIS practice's linked payers per clearinghouse.
   const counts = await db
     .select({
       clearinghouseId: clearinghousePayers.clearinghouseId,
       count: sql<number>`count(*)`,
     })
     .from(clearinghousePayers)
+    .where(eq(clearinghousePayers.practiceId, practiceId))
     .groupBy(clearinghousePayers.clearinghouseId);
   const countMap = new Map(counts.map((c) => [c.clearinghouseId, Number(c.count)]));
 
-  return rows.map((r) => ({
-    id: r.id,
-    clearinghouseId: r.clearinghouseId,
-    clearinghouseKey: r.clearinghouse.key,
-    clearinghouseName: r.clearinghouse.name,
-    label: r.label,
-    accountKeyMasked: credentialLabel(r.credentials ?? {}),
-    demo: r.credentials?.demo ?? false,
-    environment: r.credentials?.environment ?? null,
-    isActive: r.isActive,
-    lastSyncedAt: r.lastSyncedAt,
-    payerCount: countMap.get(r.clearinghouseId) ?? 0,
-    createdAt: r.createdAt,
-  }));
+  return rows.map((r) => {
+    let creds: ConnectCredentials = {};
+    try {
+      creds = decryptChCredentials(r.credentials);
+    } catch {
+      /* undecryptable (rotated key?) — show connection without cred details */
+    }
+    return {
+      id: r.id,
+      clearinghouseId: r.clearinghouseId,
+      clearinghouseKey: r.clearinghouse.key,
+      clearinghouseName: r.clearinghouse.name,
+      label: r.label,
+      accountKeyMasked: credentialLabel(creds),
+      demo: creds.demo ?? false,
+      environment: creds.environment ?? null,
+      isActive: r.isActive,
+      lastSyncedAt: r.lastSyncedAt,
+      payerCount: countMap.get(r.clearinghouseId) ?? 0,
+      createdAt: r.createdAt,
+    };
+  });
 }
 
 export async function connectClearinghouse(
@@ -136,19 +169,34 @@ export async function connectClearinghouse(
     );
   }
 
+  // Secrets are encrypted at rest. Test Mode carries no secret, so it may store
+  // plaintext when no key is configured; real credentials fail closed instead.
+  const hasSecret = !!(stored.clientSecret || stored.accountKey);
+  let persisted: StoredCredentials;
+  if (encryptionAvailable()) {
+    persisted = { enc: encryptSecret(JSON.stringify(stored)) };
+  } else if (!hasSecret) {
+    persisted = stored;
+  } else {
+    throw new ClearinghouseError(
+      500,
+      "Credential encryption is not configured (CREDENTIAL_ENCRYPTION_KEY) — cannot store clearinghouse credentials"
+    );
+  }
+
   const [row] = await db
     .insert(practiceClearinghouses)
     .values({
       practiceId,
       clearinghouseId: ch.id,
       label: label ?? ch.name,
-      credentials: stored,
+      credentials: persisted,
       isActive: true,
     })
     .onConflictDoUpdate({
       target: [practiceClearinghouses.practiceId, practiceClearinghouses.clearinghouseId],
       set: {
-        credentials: stored,
+        credentials: persisted,
         label: label ?? ch.name,
         isActive: true,
         updatedAt: new Date(),
@@ -205,7 +253,7 @@ export async function syncPayerDirectory(
   coverageError: string | null;
 }> {
   const conn = await getConnection(practiceId, connectionId);
-  const creds = conn.credentials ?? {};
+  const creds = decryptChCredentials(conn.credentials);
 
   if (conn.clearinghouse.key !== "availity") {
     throw new ClearinghouseError(
@@ -277,7 +325,9 @@ export async function syncPayerDirectory(
     coverageError = err instanceof Error ? err.message : "coverage lookup failed";
   }
 
-  // Bulk upsert the de-duplicated directory in chunks.
+  // Bulk upsert the de-duplicated directory in chunks. When the coverage lookup
+  // FAILED, don't clobber previously-synced supportsServiceReview flags with
+  // false — leave existing values untouched and only default new rows.
   const rows = Array.from(collected.entries()).map(([payerId, v]) => ({
     clearinghouseId: conn.clearinghouseId,
     payerId,
@@ -285,6 +335,15 @@ export async function syncPayerDirectory(
     transactions: Array.from(v.transactions).sort(),
     supportsServiceReview: coverage.has(payerId),
   }));
+
+  const conflictSet = {
+    name: sql`excluded.name`,
+    transactions: sql`excluded.transactions`,
+    updatedAt: new Date(),
+    ...(coverageError
+      ? {}
+      : { supportsServiceReview: sql`excluded.supports_service_review` }),
+  };
 
   const CHUNK = 500;
   for (let i = 0; i < rows.length; i += CHUNK) {
@@ -296,12 +355,7 @@ export async function syncPayerDirectory(
           clearinghousePayerDirectory.clearinghouseId,
           clearinghousePayerDirectory.payerId,
         ],
-        set: {
-          name: sql`excluded.name`,
-          transactions: sql`excluded.transactions`,
-          supportsServiceReview: sql`excluded.supports_service_review`,
-          updatedAt: new Date(),
-        },
+        set: conflictSet,
       });
   }
 
@@ -323,7 +377,7 @@ export async function searchPayers(
   query: string
 ) {
   const conn = await getConnection(practiceId, connectionId);
-  const creds = conn.credentials ?? {};
+  const creds = decryptChCredentials(conn.credentials);
 
   // Normalised results across clearinghouses.
   let results: Array<{
@@ -391,11 +445,16 @@ export async function searchPayers(
     );
   }
 
-  // Flag which are already imported into this clearinghouse's directory.
+  // Flag which this PRACTICE has already added for this clearinghouse.
   const existing = await db
     .select({ chPayerId: clearinghousePayers.clearinghousePayerId })
     .from(clearinghousePayers)
-    .where(eq(clearinghousePayers.clearinghouseId, conn.clearinghouseId));
+    .where(
+      and(
+        eq(clearinghousePayers.clearinghouseId, conn.clearinghouseId),
+        eq(clearinghousePayers.practiceId, practiceId)
+      )
+    );
   const have = new Set(existing.map((e) => e.chPayerId));
 
   return results.slice(0, 50).map((p) => ({
@@ -413,11 +472,25 @@ export async function addPayer(
 ) {
   const conn = await getConnection(practiceId, connectionId);
 
-  // Upsert the canonical payer (keyed by EDI payer id).
-  const [canonical] = await db
+  // Prefer the synced directory's name over the client-supplied one — the
+  // request body must not be able to (re)label global payer records.
+  let payerName = payer.name;
+  const dirEntry = await db.query.clearinghousePayerDirectory.findFirst({
+    columns: { name: true },
+    where: and(
+      eq(clearinghousePayerDirectory.clearinghouseId, conn.clearinghouseId),
+      eq(clearinghousePayerDirectory.payerId, payer.clearinghousePayerId)
+    ),
+  });
+  if (dirEntry?.name) payerName = dirEntry.name;
+
+  // Insert the canonical payer if new; NEVER rename an existing global row from
+  // a practice-scoped request (that previously let one tenant relabel payers
+  // for every other tenant).
+  const [inserted] = await db
     .insert(payers)
     .values({
-      name: payer.name,
+      name: payerName,
       payerId: payer.clearinghousePayerId,
       payerIdQualifier: "PI",
       supportsX278: true,
@@ -428,18 +501,22 @@ export async function addPayer(
         notes: `Imported from ${conn.clearinghouse.name}`,
       },
     })
-    .onConflictDoUpdate({
-      target: payers.payerId,
-      set: { name: payer.name },
-    })
+    .onConflictDoNothing({ target: payers.payerId })
     .returning();
+
+  const canonical =
+    inserted ??
+    (await db.query.payers.findFirst({
+      where: eq(payers.payerId, payer.clearinghousePayerId),
+    }));
 
   if (!canonical) throw new ClearinghouseError(500, "Failed to save payer");
 
-  // Link it to the clearinghouse directory (278 assumed capable by default).
+  // Link it to THIS practice's payer list (278 assumed capable by default).
   await db
     .insert(clearinghousePayers)
     .values({
+      practiceId,
       clearinghouseId: conn.clearinghouseId,
       payerId: canonical.id,
       clearinghousePayerId: payer.clearinghousePayerId,
@@ -447,7 +524,11 @@ export async function addPayer(
       capabilities: payer.capabilities ?? null,
     })
     .onConflictDoUpdate({
-      target: [clearinghousePayers.clearinghouseId, clearinghousePayers.payerId],
+      target: [
+        clearinghousePayers.practiceId,
+        clearinghousePayers.clearinghouseId,
+        clearinghousePayers.payerId,
+      ],
       set: {
         clearinghousePayerId: payer.clearinghousePayerId,
         capabilities: payer.capabilities ?? null,
@@ -473,7 +554,7 @@ export async function addPayer(
  */
 export async function testServiceReview(practiceId: string, connectionId: string) {
   const conn = await getConnection(practiceId, connectionId);
-  const creds = conn.credentials ?? {};
+  const creds = decryptChCredentials(conn.credentials);
 
   if (conn.clearinghouse.key !== "availity") {
     throw new ClearinghouseError(400, "Only available for Availity connections");
@@ -550,27 +631,23 @@ export async function testServiceReview(practiceId: string, connectionId: string
   }
 }
 
-/** Admin override for whether a payer accepts 278 through a clearinghouse. */
+/**
+ * Admin override for whether a payer accepts 278 through a clearinghouse.
+ * Scoped to the practice's OWN payer links — one tenant's override can no
+ * longer change routing for another.
+ */
 export async function setPayer278(
   practiceId: string,
   payerId: string,
   supports278: boolean
 ) {
-  // Restrict to clearinghouses this practice has connected.
-  const connected = await db
-    .select({ clearinghouseId: practiceClearinghouses.clearinghouseId })
-    .from(practiceClearinghouses)
-    .where(eq(practiceClearinghouses.practiceId, practiceId));
-  const ids = connected.map((c) => c.clearinghouseId);
-  if (ids.length === 0) return;
-
   await db
     .update(clearinghousePayers)
     .set({ supports278, updatedAt: new Date() })
     .where(
       and(
         eq(clearinghousePayers.payerId, payerId),
-        inArray(clearinghousePayers.clearinghouseId, ids)
+        eq(clearinghousePayers.practiceId, practiceId)
       )
     );
 }
@@ -596,6 +673,8 @@ export async function listPracticePayers(practiceId: string) {
     )
     .where(
       and(
+        // Only THIS practice's own payer links (pre-0007 null rows excluded).
+        eq(clearinghousePayers.practiceId, practiceId),
         eq(practiceClearinghouses.practiceId, practiceId),
         eq(practiceClearinghouses.isActive, true)
       )
@@ -639,6 +718,7 @@ export async function getRoutingForPayer(practiceId: string, payerId: string) {
       and(
         eq(practiceClearinghouses.practiceId, practiceId),
         eq(practiceClearinghouses.isActive, true),
+        eq(clearinghousePayers.practiceId, practiceId),
         eq(clearinghousePayers.payerId, payerId)
       )
     );
@@ -650,7 +730,7 @@ export async function getRoutingForPayer(practiceId: string, payerId: string) {
   return {
     connectionId: best.connectionId,
     clearinghouseKey: best.clearinghouseKey,
-    credentials: best.credentials ?? null,
+    credentials: decryptChCredentials(best.credentials),
     clearinghousePayerId: best.clearinghousePayerId,
     supports278: best.supports278,
   };

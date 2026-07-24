@@ -3,8 +3,11 @@ import { z } from "zod";
 import * as portalService from "../services/portal.service.js";
 import { PortalError } from "../services/portal.service.js";
 import * as recipeService from "../services/portal-recipe.service.js";
-import type { RecipeStep } from "../services/portal-recipe.types.js";
-import { requireRole } from "../auth/tenant.js";
+import {
+  isAllowedRecipeUrl,
+  type RecipeStep,
+} from "../services/portal-recipe.types.js";
+import { requireRole, requirePlatformAdmin } from "../auth/tenant.js";
 
 const connectSchema = z.object({
   portalKey: z.string().min(1).default("availity_essentials"),
@@ -102,12 +105,29 @@ export async function portalRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
 
-  // ── Recipes (learned portal workflows; global, admin-managed) ─────────────
+  // ── Recipes (learned portal workflows) ────────────────────────────────────
+  // Recipes are GLOBAL: every tenant's worker replays the active one, with live
+  // PHI bound into its steps. Writing them is therefore PLATFORM-admin only
+  // (practice-admin is self-serve and not a trust boundary), steps are strictly
+  // schema-validated, and navigate URLs must stay on the portal's own hosts.
+
+  const selector = z.string().min(1).max(1000);
+  const stepSchema = z.discriminatedUnion("action", [
+    z.object({ action: z.literal("navigate"), url: z.string().url().max(2000), note: z.string().max(500).optional() }),
+    z.object({ action: z.literal("waitFor"), selector, timeoutMs: z.number().int().min(100).max(120_000).optional(), note: z.string().max(500).optional() }),
+    z.object({ action: z.literal("click"), selector, note: z.string().max(500).optional() }),
+    z.object({ action: z.literal("type"), selector, value: z.string().max(2000).optional(), binding: z.string().max(200).optional(), note: z.string().max(500).optional() }),
+    z.object({ action: z.literal("select"), selector, value: z.string().max(2000).optional(), binding: z.string().max(200).optional(), note: z.string().max(500).optional() }),
+    z.object({ action: z.literal("check"), selector, note: z.string().max(500).optional() }),
+    z.object({ action: z.literal("captureText"), selector, store: z.literal("confirmationNumber"), note: z.string().max(500).optional() }),
+    z.object({ action: z.literal("pauseForHuman"), reason: z.string().min(1).max(500), note: z.string().max(500).optional() }),
+    z.object({ action: z.literal("submit"), selector, note: z.string().max(500).optional() }),
+  ]);
 
   const recipeSchema = z.object({
-    portalKey: z.string().min(1),
+    portalKey: z.string().min(1).max(50),
     name: z.string().min(1).max(255),
-    steps: z.array(z.record(z.unknown())).min(1),
+    steps: z.array(stepSchema).min(1).max(200),
     activate: z.boolean().optional(),
   });
 
@@ -119,7 +139,7 @@ export async function portalRoutes(app: FastifyInstance) {
 
   app.post(
     "/portals/recipes",
-    { preHandler: requireRole("admin") },
+    { preHandler: requirePlatformAdmin },
     async (req, reply) => {
       const parsed = recipeSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -130,11 +150,27 @@ export async function portalRoutes(app: FastifyInstance) {
           details: parsed.error.flatten(),
         });
       }
+
+      // Navigation is confined to the portal's own hosts — a recipe runs in an
+      // authenticated session with PHI bound in, so anywhere else is exfil.
+      for (const step of parsed.data.steps) {
+        if (
+          step.action === "navigate" &&
+          !isAllowedRecipeUrl(parsed.data.portalKey, step.url)
+        ) {
+          return reply.status(400).send({
+            error: "VALIDATION_ERROR",
+            message: `navigate URL not allowed for ${parsed.data.portalKey}: ${step.url}`,
+            statusCode: 400,
+          });
+        }
+      }
+
       try {
         const row = await recipeService.createRecipe({
           portalKey: parsed.data.portalKey,
           name: parsed.data.name,
-          steps: parsed.data.steps as unknown as RecipeStep[],
+          steps: parsed.data.steps as RecipeStep[],
           activate: parsed.data.activate,
           createdBy: req.auth.email,
         });
@@ -147,7 +183,7 @@ export async function portalRoutes(app: FastifyInstance) {
 
   app.post(
     "/portals/recipes/:id/activate",
-    { preHandler: requireRole("admin") },
+    { preHandler: requirePlatformAdmin },
     async (req, reply) => {
       const { id } = req.params as { id: string };
       try {

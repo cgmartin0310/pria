@@ -283,3 +283,26 @@ export function requireRole(...roles: UserRole[]) {
     }
   };
 }
+
+/**
+ * Guard for PLATFORM-level resources shared across every tenant (e.g. portal
+ * recipes). Practice-admin is NOT sufficient — any self-serve signup becomes
+ * admin of a fresh practice, so cross-tenant writes need this stronger gate.
+ * Fails closed when PLATFORM_ADMIN_EMAILS is unset.
+ */
+export async function requirePlatformAdmin(
+  req: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  const allowed = config.platformAdminEmails;
+  if (allowed.length === 0 || !allowed.includes(req.auth.email.toLowerCase())) {
+    await reply.status(403).send({
+      error: "FORBIDDEN",
+      message:
+        allowed.length === 0
+          ? "Platform administration is not configured (PLATFORM_ADMIN_EMAILS)"
+          : "Requires platform administrator access",
+      statusCode: 403,
+    });
+  }
+}

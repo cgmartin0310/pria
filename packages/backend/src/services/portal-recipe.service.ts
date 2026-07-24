@@ -51,6 +51,8 @@ export async function listRecipes(portalKey?: string) {
     where: portalKey ? eq(portalRecipes.portalKey, portalKey) : undefined,
     orderBy: [desc(portalRecipes.portalKey), desc(portalRecipes.version)],
   });
+  // NOTE: createdBy (an email) is intentionally NOT returned — this listing is
+  // visible to every tenant and must not disclose other users' addresses.
   return rows.map((r) => ({
     id: r.id,
     portalKey: r.portalKey,
@@ -58,7 +60,6 @@ export async function listRecipes(portalKey?: string) {
     version: r.version,
     stepCount: Array.isArray(r.steps) ? r.steps.length : 0,
     isActive: r.isActive,
-    createdBy: r.createdBy,
     createdAt: r.createdAt,
   }));
 }
