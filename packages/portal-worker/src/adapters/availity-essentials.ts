@@ -20,13 +20,19 @@ export interface SubmitInput {
 }
 
 // ─── Availity Essentials selectors ──────────────────────────────────────────
-// TODO: fill these in against the live login page (they are placeholders).
-const LOGIN_URL = "https://apps.availity.com/availity/web/public.elegant.login";
+// Captured from the LIVE portal 2026-07-24 (DevTools extraction session).
+const LOGIN_URL =
+  "https://essentials.availity.com/static/public/onb/onboarding-ui-apps/availity-fr-ui/#/login";
 const SEL = {
-  loggedInMarker: "TODO", // an element only present when authenticated
-  username: "TODO",
-  password: "TODO",
-  loginButton: "TODO",
+  /** Top-nav logout button — present on every authenticated page. */
+  loggedInMarker: "#logout-link",
+  username: "#userId",
+  password: "#password",
+  /** The login form's only submit button ("Sign In"). */
+  loginButton: 'button[type="submit"]',
+  // MFA screen not yet captured (device-trust skipped it during the session).
+  // A fresh worker login WILL trigger it, so these must be filled from the
+  // incognito capture before first live run.
   mfaCodeInput: "TODO",
   mfaSubmit: "TODO",
 };
