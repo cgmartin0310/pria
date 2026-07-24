@@ -2,7 +2,14 @@ import { Worker } from "bullmq";
 import { Redis } from "ioredis";
 import { eq, and } from "drizzle-orm";
 import { config } from "./config.js";
-import { db, portalSubmissions, portalConnections, portalRecipes } from "./db.js";
+import {
+  db,
+  portalSubmissions,
+  portalConnections,
+  portalRecipes,
+  authorizations,
+  authorizationHistory,
+} from "./db.js";
 import { decryptSecret, encryptSecret } from "./crypto.js";
 import * as availityEssentials from "./adapters/availity-essentials.js";
 import type { PortalCredentials, PortalSubmissionPayload, RecipeStep } from "./types.js";
@@ -99,13 +106,44 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
     });
 
     switch (outcome.kind) {
-      case "submitted":
+      case "submitted": {
         await setStatus(portalSubmissionId, {
           status: "submitted",
           confirmationNumber: outcome.confirmationNumber,
           completedAt: new Date(),
         });
+        // Reflect the filing on the authorization itself: pending = filed with
+        // the payer, awaiting their decision. Best-effort — the submission row
+        // above is the source of truth.
+        try {
+          await db
+            .update(authorizations)
+            .set({
+              status: "pending",
+              submittedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(authorizations.id, sub.authorizationId));
+          await db.insert(authorizationHistory).values({
+            authorizationId: sub.authorizationId,
+            action: "portal_submitted",
+            fromStatus: "pending",
+            toStatus: "pending",
+            notes:
+              `Filed via payer portal by ${config.workerId}` +
+              (outcome.confirmationNumber
+                ? ` — confirmation ${outcome.confirmationNumber}`
+                : " (no confirmation number captured)"),
+            performedBy: "system",
+          });
+        } catch (err) {
+          console.error(
+            `[portal-worker] filed OK but couldn't update authorization ${sub.authorizationId}:`,
+            err instanceof Error ? err.message : err
+          );
+        }
         break;
+      }
       case "needs_mfa":
         await setStatus(portalSubmissionId, {
           status: "needs_mfa",

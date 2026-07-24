@@ -51,6 +51,31 @@ export const portalRecipes = pgTable("portal_recipes", {
   isActive: boolean("is_active").notNull().default(false),
 });
 
+// Minimal views of the auth tables so a successful portal filing is reflected
+// on the authorization itself, not just the portal_submissions row.
+export const authorizations = pgTable("authorizations", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  status: varchar("status", { length: 20 }).notNull(),
+  authNumber: varchar("auth_number", { length: 100 }),
+  submittedAt: timestamp("submitted_at"),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const authorizationHistory = pgTable("authorization_history", {
+  id: varchar("id", { length: 26 }).primaryKey().$defaultFn(() => {
+    // ULID-ish fallback id (backend normally generates these).
+    return (
+      Date.now().toString(36) + Math.random().toString(36).slice(2, 16)
+    ).slice(0, 26);
+  }),
+  authorizationId: varchar("authorization_id", { length: 26 }).notNull(),
+  action: varchar("action", { length: 100 }).notNull(),
+  fromStatus: varchar("from_status", { length: 20 }),
+  toStatus: varchar("to_status", { length: 20 }).notNull(),
+  notes: text("notes"),
+  performedBy: varchar("performed_by", { length: 255 }).notNull(),
+});
+
 const { Pool } = pg;
 const pool = new Pool({ connectionString: config.databaseUrl, max: 5 });
 

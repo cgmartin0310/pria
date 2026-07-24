@@ -5,6 +5,7 @@ import { db, schema } from "../db/index.js";
 import * as ediService from "../services/edi.service.js";
 import { assembleX278Request } from "../services/edi-assembler.service.js";
 import { getRoutingForPayer } from "../services/clearinghouse.service.js";
+import { enqueuePortalSubmission } from "../services/portal.service.js";
 import { buildSimulatedResponse } from "../services/simulated.service.js";
 import { applyX278Response } from "../services/edi-response.service.js";
 import * as availity from "../services/availity.service.js";
@@ -96,40 +97,60 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
     // ── Route to the practice's connected clearinghouse ───────────────────
     const routing = await getRoutingForPayer(practiceId, auth.payerId);
 
+    /**
+     * Transport ladder: API route → portal agent → manual. The user just
+     * clicks Submit — when a payer has no API route, we automatically queue it
+     * for the portal worker fleet; only when no portal is connected either does
+     * it fall to "submit manually".
+     */
+    const routeToPortalOrManual = async (why: string): Promise<void> => {
+      try {
+        await enqueuePortalSubmission(practiceId, authorizationId);
+        await db
+          .update(authorizations)
+          .set({ status: "pending", updatedAt: new Date() })
+          .where(eq(authorizations.id, authorizationId));
+        await db.insert(authorizationHistory).values({
+          authorizationId,
+          action: "routed_to_portal",
+          fromStatus: "submitted",
+          toStatus: "pending",
+          notes: `${why} — queued for agent submission via the payer portal.`,
+          performedBy: "system",
+        });
+        console.log(
+          `[pa-submit] Auth ${authorizationId} routed to portal queue (${why})`
+        );
+      } catch {
+        // No portal connected either — genuinely manual.
+        await db
+          .update(authorizations)
+          .set({ status: "pending", updatedAt: new Date() })
+          .where(eq(authorizations.id, authorizationId));
+        await db.insert(authorizationHistory).values({
+          authorizationId,
+          action: "manual_submission_required",
+          fromStatus: "submitted",
+          toStatus: "pending",
+          notes:
+            `${why}, and no portal is connected. Connect a clearinghouse or ` +
+            `your portal login in Settings, or submit manually.`,
+          performedBy: "system",
+        });
+      }
+    };
+
     if (!routing) {
-      // No clearinghouse connected for this payer — falls back to manual.
-      await db
-        .update(authorizations)
-        .set({ status: "pending", updatedAt: new Date() })
-        .where(eq(authorizations.id, authorizationId));
-      await db.insert(authorizationHistory).values({
-        authorizationId,
-        action: "manual_submission_required",
-        fromStatus: "submitted",
-        toStatus: "pending",
-        notes:
-          `No connected clearinghouse can reach ${auth.payer.name}. ` +
-          `Connect a clearinghouse in Settings and import this payer, or submit manually.`,
-        performedBy: "system",
-      });
+      await routeToPortalOrManual(
+        `No API route can reach ${auth.payer.name}`
+      );
       return;
     }
 
     if (!routing.supports278) {
-      await db
-        .update(authorizations)
-        .set({ status: "pending", updatedAt: new Date() })
-        .where(eq(authorizations.id, authorizationId));
-      await db.insert(authorizationHistory).values({
-        authorizationId,
-        action: "manual_submission_required",
-        fromStatus: "submitted",
-        toStatus: "pending",
-        notes:
-          `${auth.payer.name} is not marked 278-capable via ${routing.clearinghouseKey}. ` +
-          `Update the payer's 278 setting or submit manually.`,
-        performedBy: "system",
-      });
+      await routeToPortalOrManual(
+        `${auth.payer.name} does not accept 278 via ${routing.clearinghouseKey}`
+      );
       return;
     }
 
