@@ -1,3 +1,4 @@
+import { notInArray } from "drizzle-orm";
 import { db, schema } from "./index.js";
 
 /**
@@ -25,4 +26,16 @@ export async function ensureBaselineData(): Promise<void> {
         set: { name: ch.name, isActive: ch.isActive },
       });
   }
+
+  // Deactivate networks we no longer offer (e.g. the removed claim_md row kept
+  // showing as a connectable "Connected" card because it stayed active).
+  await db
+    .update(schema.clearinghouses)
+    .set({ isActive: false })
+    .where(
+      notInArray(
+        schema.clearinghouses.key,
+        CLEARINGHOUSES.map((c) => c.key)
+      )
+    );
 }

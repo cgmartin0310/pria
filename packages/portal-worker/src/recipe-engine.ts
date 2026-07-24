@@ -1,6 +1,28 @@
 import type { Page } from "playwright-core";
 import type { PortalOutcome, PortalSubmissionPayload, RecipeStep } from "./types.js";
 
+/**
+ * Hosts a recipe may navigate to, per portal — defense-in-depth mirror of the
+ * backend's save-time validation. Recipes execute in an authenticated session
+ * with PHI bound in, so navigation anywhere else is treated as exfiltration
+ * and pauses for a human instead of executing.
+ */
+const PORTAL_ALLOWED_HOSTS: Record<string, string[]> = {
+  availity_essentials: ["availity.com"],
+};
+
+function isAllowedUrl(portalKey: string, url: string): boolean {
+  const hosts = PORTAL_ALLOWED_HOSTS[portalKey];
+  if (!hosts || hosts.length === 0) return false;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    return hosts.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
+}
+
 /** Resolve a value binding like "patient.memberId" or "diagnoses.0" from the payload. */
 function resolveBinding(binding: string, payload: PortalSubmissionPayload): string {
   let cur: unknown = payload;
@@ -29,6 +51,7 @@ function valueFor(
  */
 export async function runRecipe(
   page: Page,
+  portalKey: string,
   steps: RecipeStep[],
   payload: PortalSubmissionPayload
 ): Promise<PortalOutcome> {
@@ -38,6 +61,12 @@ export async function runRecipe(
     try {
       switch (step.action) {
         case "navigate":
+          if (!isAllowedUrl(portalKey, step.url)) {
+            return {
+              kind: "needs_human",
+              reason: `Recipe navigate blocked (host not allowed for ${portalKey}): ${step.url}`,
+            };
+          }
           await page.goto(step.url, { waitUntil: "domcontentloaded" });
           break;
         case "waitFor":

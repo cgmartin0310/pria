@@ -1,4 +1,5 @@
-import { eq, and } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+import { eq, and, isNull } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { generateX278Request } from "./edi.service.js";
 import type { X12278Request, ServiceLine } from "@pria/shared";
@@ -110,11 +111,15 @@ export async function assembleX278Request(
   const warnings = [...validation.warnings];
 
   // ── Generate/persist internal tracking number ─────────────────────────────
+  // Second-granularity alone collides for concurrent submits, so a random
+  // suffix is appended, and the write is guarded on the column still being
+  // null; if a concurrent run won the race, its value is re-read and used.
   let trackingNumber = auth.internalTrackingNumber;
   if (!trackingNumber) {
     const pad = (n: number, len: number): string => String(n).padStart(len, "0");
     const now = new Date();
-    trackingNumber = [
+    const suffix = randomBytes(3).toString("hex").toUpperCase();
+    const candidate = [
       "PRIA",
       now.getFullYear(),
       pad(now.getMonth() + 1, 2),
@@ -122,12 +127,30 @@ export async function assembleX278Request(
       pad(now.getHours(), 2),
       pad(now.getMinutes(), 2),
       pad(now.getSeconds(), 2),
+      suffix,
     ].join("");
 
-    await db
+    const [claimed] = await db
       .update(authorizations)
-      .set({ internalTrackingNumber: trackingNumber, updatedAt: new Date() })
-      .where(eq(authorizations.id, authorizationId));
+      .set({ internalTrackingNumber: candidate, updatedAt: new Date() })
+      .where(
+        and(
+          eq(authorizations.id, authorizationId),
+          isNull(authorizations.internalTrackingNumber)
+        )
+      )
+      .returning({ trackingNumber: authorizations.internalTrackingNumber });
+
+    if (claimed?.trackingNumber) {
+      trackingNumber = claimed.trackingNumber;
+    } else {
+      // A concurrent run already assigned one — use theirs.
+      const fresh = await db.query.authorizations.findFirst({
+        columns: { internalTrackingNumber: true },
+        where: eq(authorizations.id, authorizationId),
+      });
+      trackingNumber = fresh?.internalTrackingNumber ?? candidate;
+    }
   }
 
   // ── Current timestamp for transaction envelope ────────────────────────────

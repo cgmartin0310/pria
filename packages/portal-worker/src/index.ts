@@ -4,8 +4,17 @@ import { eq, and } from "drizzle-orm";
 import { config } from "./config.js";
 import { db, portalSubmissions, portalConnections, portalRecipes } from "./db.js";
 import { decryptSecret, encryptSecret } from "./crypto.js";
-import { submit } from "./adapters/availity-essentials.js";
+import * as availityEssentials from "./adapters/availity-essentials.js";
 import type { PortalCredentials, PortalSubmissionPayload, RecipeStep } from "./types.js";
+
+/**
+ * portalKey → adapter dispatch. Previously the Availity adapter was hardcoded
+ * for every portal, so a connection with any other portalKey would have been
+ * driven against the wrong login flow.
+ */
+const adapters: Record<string, typeof availityEssentials.submit> = {
+  availity_essentials: availityEssentials.submit,
+};
 
 const connection = new Redis(config.redisUrl, {
   maxRetriesPerRequest: null,
@@ -53,6 +62,15 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
       return;
     }
 
+    const adapter = adapters[conn.portalKey];
+    if (!adapter) {
+      await setStatus(portalSubmissionId, {
+        status: "needs_human",
+        needsHumanReason: `No adapter implemented for portal '${conn.portalKey}'`,
+      });
+      return;
+    }
+
     const credentials = JSON.parse(decryptSecret(conn.encryptedCredentials)) as PortalCredentials;
     const sessionState = conn.encryptedSession ? decryptSecret(conn.encryptedSession) : undefined;
 
@@ -63,7 +81,7 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
       attempts: (sub.attempts ?? 0) + 1,
     });
 
-    const outcome = await submit({
+    const outcome = await adapter({
       credentials,
       sessionState,
       recipeSteps: recipe.steps as RecipeStep[],

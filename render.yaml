@@ -36,6 +36,14 @@ services:
         sync: false
       - key: CLERK_SECRET_KEY
         sync: false
+      # 32-byte base64 key encrypting stored credentials (portal logins,
+      # clearinghouse secrets). Generate:
+      #   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        sync: false
+      # Comma-separated emails allowed to manage platform-wide portal recipes.
+      - key: PLATFORM_ADMIN_EMAILS
+        sync: false
       - key: CORS_ORIGIN
         value: https://pria-app.onrender.com
     healthCheckPath: /api/health

@@ -105,7 +105,12 @@ export async function submit(input: SubmitInput): Promise<PortalOutcome> {
     }
 
     const page = await ctx.newPage();
-    const outcome = await runRecipe(page, input.recipeSteps, input.payload);
+    const outcome = await runRecipe(
+      page,
+      "availity_essentials",
+      input.recipeSteps,
+      input.payload
+    );
 
     // Refresh the persisted session after a successful run.
     if (outcome.kind === "submitted") {

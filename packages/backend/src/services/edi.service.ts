@@ -36,11 +36,22 @@ function padRight(s: string, len: number): string {
 /**
  * Build an EDI segment with proper element separator and terminator.
  * Trailing empty elements are automatically trimmed (but never the segment ID).
+ *
+ * Every element is sanitized: X12's element separator (*), segment terminator
+ * (~), repetition separator (^), and newlines are replaced with spaces so a
+ * practice named "SMITH * ASSOCIATES" or a multi-line note can't inject
+ * delimiters and corrupt the transaction. The component separator (:) is NOT
+ * stripped here because composite elements (UM04, HI, SV1) are deliberately
+ * pre-joined with it — free-text sources should avoid colons upstream.
  */
 function seg(id: string, ...elements: (string | number | null | undefined)[]): string {
   const parts: string[] = [id];
   for (const e of elements) {
-    parts.push(e === null || e === undefined ? "" : String(e));
+    parts.push(
+      e === null || e === undefined
+        ? ""
+        : String(e).replace(/[*~^\r\n]/g, " ")
+    );
   }
   // Trim trailing empty elements
   while (parts.length > 1 && parts[parts.length - 1] === "") {
@@ -323,11 +334,17 @@ export function generateX278Request(request: X12278Request): string {
   ));
 
   // HI — Health Diagnosis Codes
-  // Qualifier "BF" = ICD-10-CM Diagnosis (professional outpatient)
-  // X12 allows up to 12 composite elements per HI segment
+  // 5010 ICD-10-CM qualifiers: ABK = principal diagnosis, ABF = additional.
+  // (BK/BF are the ICD-9 equivalents — using BF for ICD-10 was incorrect.)
+  // X12 allows up to 12 composite elements per HI segment.
   if (request.authRequest.diagnoses.length > 0) {
+    let emitted = 0;
     for (const diagChunk of chunk(request.authRequest.diagnoses, 12)) {
-      const hiElements = diagChunk.map(code => `BF${COMP}${code}`);
+      const hiElements = diagChunk.map((code) => {
+        const qualifier = emitted === 0 ? "ABK" : "ABF";
+        emitted++;
+        return `${qualifier}${COMP}${code}`;
+      });
       add(["HI", ...hiElements].join(SEP) + TERM);
     }
   }
@@ -382,11 +399,12 @@ export function generateX278Request(request: X12278Request): string {
   }
 
   // MSG — Clinical Notes / Free-Text Message to UMO
-  // Max 264 chars per X12 spec; strip delimiters from content
+  // Max 264 chars per X12 spec; strip ALL reserved chars incl. newlines and
+  // the component separator (free text has no legitimate composites).
   if (request.authRequest.clinicalNotes) {
     const msgText = request.authRequest.clinicalNotes
       .substring(0, 264)
-      .replace(/[*~:^]/g, " "); // strip X12 reserved chars
+      .replace(/[*~:^\r\n]/g, " ");
     add(seg("MSG", msgText));
   }
 
