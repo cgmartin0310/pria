@@ -1,0 +1,28 @@
+{
+  "name": "@pria/portal-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent fleet that submits prior auths to portal-only payers by replaying learned recipes.",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "bullmq": "^5.14.0",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.38.4",
+    "ioredis": "^5.4.2",
+    "pg": "^8.13.3",
+    "playwright-core": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

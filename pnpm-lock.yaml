@@ -119,6 +119,40 @@ importers:
         specifier: ^6.1.0
         version: 6.4.2(@types/node@22.19.18)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)
 
+  packages/portal-worker:
+    dependencies:
+      bullmq:
+        specifier: ^5.14.0
+        version: 5.76.6
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
+      drizzle-orm:
+        specifier: ^0.38.4
+        version: 0.38.4(@types/pg@8.20.0)(@types/react@19.2.14)(pg@8.20.0)(react@19.2.6)
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.10.1
+      pg:
+        specifier: ^8.13.3
+        version: 8.20.0
+      playwright-core:
+        specifier: ^1.49.0
+        version: 1.61.1
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.7
+        version: 22.19.18
+      '@types/pg':
+        specifier: ^8.11.11
+        version: 8.20.0
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/shared:
     devDependencies:
       typescript:
@@ -1880,6 +1914,11 @@ packages:
     resolution: {integrity: sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==}
     hasBin: true
 
+  playwright-core@1.61.1:
+    resolution: {integrity: sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   postcss@8.5.14:
     resolution: {integrity: sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg==}
     engines: {node: ^10 || ^12 || >=14}
@@ -3609,6 +3648,8 @@ snapshots:
       safe-stable-stringify: 2.5.0
       sonic-boom: 4.2.1
       thread-stream: 4.1.0
+
+  playwright-core@1.61.1: {}
 
   postcss@8.5.14:
     dependencies:
