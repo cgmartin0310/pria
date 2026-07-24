@@ -9,9 +9,24 @@ const createAuthSchema = z.object({
   cptCodes: z.array(z.string()).min(1),
   icdCodes: z.array(z.string()).min(1),
   requestedVisits: z.number().int().min(1).max(200),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  // The form sends null for empty dates — accept and normalize.
+  startDate: z.string().nullish(),
+  endDate: z.string().nullish(),
   clinicalSummary: z.string().optional(),
+  // Fields the form has always sent but the backend silently dropped:
+  providerId: z.string().optional(),
+  certificationTypeCode: z.string().max(2).optional(),
+  serviceTypeCode: z.string().max(5).optional(),
+  levelOfServiceCode: z.string().max(2).optional(),
+  visitPattern: z
+    .object({
+      visitsPerPeriod: z.number().int().min(1),
+      periodFrequency: z.enum(["DA", "WK", "MO"]),
+      periodCount: z.number().int().min(1),
+      totalDurationDays: z.number().int().min(1).optional(),
+    })
+    .optional(),
+  clinicalNotes: z.string().max(5000).optional(),
 });
 
 export async function authorizationRoutes(app: FastifyInstance) {

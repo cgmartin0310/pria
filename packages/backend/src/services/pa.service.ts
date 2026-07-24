@@ -10,6 +10,7 @@ const {
   authorizationHistory,
   authorizationDocuments,
   patients,
+  providers,
   payers,
 } = schema;
 
@@ -78,9 +79,20 @@ export async function createAuthorization(
     cptCodes: string[];
     icdCodes: string[];
     requestedVisits: number;
-    startDate?: string;
-    endDate?: string;
+    startDate?: string | null;
+    endDate?: string | null;
     clinicalSummary?: string;
+    providerId?: string;
+    certificationTypeCode?: string;
+    serviceTypeCode?: string;
+    levelOfServiceCode?: string;
+    visitPattern?: {
+      visitsPerPeriod: number;
+      periodFrequency: "DA" | "WK" | "MO";
+      periodCount: number;
+      totalDurationDays?: number;
+    };
+    clinicalNotes?: string;
   }
 ) {
   // Tenant check: the patient must belong to THIS practice. Without this, a
@@ -97,19 +109,39 @@ export async function createAuthorization(
     throw new Error("Patient not found");
   }
 
+  // Same tenant check for the treating provider, when one is assigned.
+  if (data.providerId) {
+    const provider = await db.query.providers.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(providers.id, data.providerId),
+        eq(providers.practiceId, practiceId)
+      ),
+    });
+    if (!provider) {
+      throw new Error("Provider not found");
+    }
+  }
+
   const [auth] = await db
     .insert(authorizations)
     .values({
       practiceId,
       patientId: data.patientId,
       payerId: data.payerId,
+      providerId: data.providerId ?? null,
       status: "draft",
       cptCodes: data.cptCodes,
       icdCodes: data.icdCodes,
       requestedVisits: data.requestedVisits,
+      certificationTypeCode: data.certificationTypeCode ?? null,
+      serviceTypeCode: data.serviceTypeCode ?? null,
+      levelOfServiceCode: data.levelOfServiceCode ?? null,
+      visitPattern: data.visitPattern ?? null,
       startDate: data.startDate ?? null,
       endDate: data.endDate ?? null,
       clinicalSummary: data.clinicalSummary ?? null,
+      clinicalNotes: data.clinicalNotes ?? null,
     })
     .returning();
 
