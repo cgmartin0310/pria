@@ -267,9 +267,18 @@ async function execSteps(
         case "press":
           await page.keyboard.press(step.key);
           break;
-        case "select":
-          await selectWithFallback(state.target, fixSelector(sub(step.selector)), valueFor(step));
+        case "wait":
+          await page.waitForTimeout(step.ms);
           break;
+        case "select": {
+          const value = valueFor(step);
+          // A BOUND select with an empty payload value is an optional field
+          // (e.g. gender the portal prefills from eligibility) — skip it.
+          // A literal empty value is a recipe bug and still throws.
+          if (!value && step.binding) break;
+          await selectWithFallback(state.target, fixSelector(sub(step.selector)), value);
+          break;
+        }
         case "check":
           await state.target.check(fixSelector(sub(step.selector)));
           break;

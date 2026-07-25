@@ -150,6 +150,7 @@ export async function portalRoutes(app: FastifyInstance) {
     z.object({ action: z.literal("type"), selector, value: z.string().max(2000).optional(), binding, transform, note }),
     z.object({ action: z.literal("typeActive"), value: z.string().max(2000).optional(), binding, transform, note }),
     z.object({ action: z.literal("press"), key: z.string().min(1).max(30), note }),
+    z.object({ action: z.literal("wait"), ms: z.number().int().min(100).max(30_000), note }),
     z.object({ action: z.literal("select"), selector, value: z.string().max(2000).optional(), binding, note }),
     z.object({ action: z.literal("check"), selector, note }),
     z.object({ action: z.literal("captureText"), selector, store: z.literal("confirmationNumber"), note }),

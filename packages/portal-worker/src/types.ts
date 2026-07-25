@@ -59,6 +59,7 @@ export type RecipeStep =
   | { action: "type"; selector: string; value?: string; binding?: string; transform?: RecipeTransform; note?: string }
   | { action: "typeActive"; value?: string; binding?: string; transform?: RecipeTransform; note?: string }
   | { action: "press"; key: string; note?: string }
+  | { action: "wait"; ms: number; note?: string }
   | { action: "select"; selector: string; value?: string; binding?: string; note?: string }
   | { action: "check"; selector: string; note?: string }
   | { action: "captureText"; selector: string; store: "confirmationNumber"; note?: string }

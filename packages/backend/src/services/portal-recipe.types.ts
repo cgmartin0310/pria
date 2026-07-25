@@ -110,6 +110,12 @@ export type RecipeStep =
       note?: string;
     }
   | {
+      /** Fixed pause, e.g. letting an ajax Select2 load results before Enter. */
+      action: "wait";
+      ms: number;
+      note?: string;
+    }
+  | {
       action: "select";
       selector: string;
       value?: string;
