@@ -19,6 +19,7 @@ function PayerRow({ payer, isAdmin }: { payer: Payer; isAdmin: boolean }) {
     payer.authPolicy?.maxVisitsPerAuth?.toString() ?? ""
   );
   const [portalName, setPortalName] = useState(payer.authPolicy?.portalPayerName ?? "");
+  const [portalKey, setPortalKey] = useState(payer.authPolicy?.portalKey ?? "");
   const [notes, setNotes] = useState(payer.authPolicy?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -34,6 +35,7 @@ function PayerRow({ payer, isAdmin }: { payer: Payer; isAdmin: boolean }) {
       if (months.trim() !== "") policy.authPeriodMonths = parseInt(months, 10);
       if (maxVisits.trim() !== "") policy.maxVisitsPerAuth = parseInt(maxVisits, 10);
       if (portalName.trim()) policy.portalPayerName = portalName.trim();
+      if (portalKey) policy.portalKey = portalKey as PayerAuthPolicy["portalKey"];
       if (notes.trim()) policy.notes = notes.trim();
       await payersApi.updatePolicy(payer.id, policy);
       setSaved(true);
@@ -97,6 +99,19 @@ function PayerRow({ payer, isAdmin }: { payer: Payer; isAdmin: boolean }) {
             disabled={!isAdmin}
           />
         </div>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500">Auth portal</label>
+        <select
+          className="block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+          value={portalKey}
+          onChange={(e) => setPortalKey(e.target.value)}
+          disabled={!isAdmin}
+        >
+          <option value="">Availity Essentials (default)</option>
+          <option value="carelon_mbm">Carelon MBM — no recipe yet, routes to manual</option>
+          <option value="manual">Manual only — Pria won't auto-file this payer</option>
+        </select>
       </div>
       <div>
         <label className="text-xs text-slate-500">

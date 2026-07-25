@@ -239,6 +239,11 @@ export interface PayerAuthPolicy {
    * HEALTH"). Portal recipes select the payer by this.
    */
   portalPayerName?: string;
+  /**
+   * Portal that files this payer's auths when no API route exists. Unset =
+   * availity_essentials. "manual" = no automated path (route to manual work).
+   */
+  portalKey?: "availity_essentials" | "carelon_mbm" | "manual";
   notes?: string;
 }
 

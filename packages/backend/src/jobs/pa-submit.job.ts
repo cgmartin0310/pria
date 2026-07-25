@@ -121,8 +121,13 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
         console.log(
           `[pa-submit] Auth ${authorizationId} routed to portal queue (${why})`
         );
-      } catch {
-        // No portal connected either — genuinely manual.
+      } catch (portalErr) {
+        // No automated portal path — genuinely manual. Surface WHY (payer
+        // marked manual, required portal not connected, …) in the history.
+        const detail =
+          portalErr instanceof Error && portalErr.message
+            ? portalErr.message
+            : "No portal is connected — add your portal login in Settings.";
         await db
           .update(authorizations)
           .set({ status: "pending", updatedAt: new Date() })
@@ -132,9 +137,7 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
           action: "manual_submission_required",
           fromStatus: "submitted",
           toStatus: "pending",
-          notes:
-            `${why}, and no portal is connected. Connect a clearinghouse or ` +
-            `your portal login in Settings, or submit manually.`,
+          notes: `${why}. ${detail}`,
           performedBy: "system",
         });
       }

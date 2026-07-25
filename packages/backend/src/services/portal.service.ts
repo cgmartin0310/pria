@@ -240,19 +240,6 @@ export async function enqueuePortalSubmission(
   practiceId: string,
   authorizationId: string
 ) {
-  const conn = await db.query.portalConnections.findFirst({
-    where: and(
-      eq(portalConnections.practiceId, practiceId),
-      eq(portalConnections.isActive, true)
-    ),
-  });
-  if (!conn) {
-    throw new PortalError(
-      400,
-      "No portal connected — add your Availity Essentials login in Settings first"
-    );
-  }
-
   const auth = await db.query.authorizations.findFirst({
     where: and(
       eq(authorizations.id, authorizationId),
@@ -262,15 +249,42 @@ export async function enqueuePortalSubmission(
   });
   if (!auth) throw new PortalError(404, "Authorization not found");
 
-  // The practice's payer link may carry a portal-specific display name.
+  // The practice's payer link carries portal routing + display-name policy.
   const link = await db.query.clearinghousePayers.findFirst({
     where: and(
       eq(clearinghousePayers.practiceId, practiceId),
       eq(clearinghousePayers.payerId, auth.payerId)
     ),
   });
+  const policy = link?.authPolicy;
 
-  const payload = buildPayload(auth, link?.authPolicy?.portalPayerName);
+  if (policy?.portalKey === "manual") {
+    throw new PortalError(
+      422,
+      `${auth.payer.name} is set to manual submission in Payer Rules — file this auth directly in the payer's own portal` +
+        (policy.notes ? ` (${policy.notes})` : "")
+    );
+  }
+
+  // Route to the payer's designated portal; unset means the default portal.
+  const requiredPortal = policy?.portalKey ?? "availity_essentials";
+  const conn = await db.query.portalConnections.findFirst({
+    where: and(
+      eq(portalConnections.practiceId, practiceId),
+      eq(portalConnections.portalKey, requiredPortal),
+      eq(portalConnections.isActive, true)
+    ),
+  });
+  if (!conn) {
+    throw new PortalError(
+      400,
+      requiredPortal === "availity_essentials"
+        ? "No portal connected — add your Availity Essentials login in Settings first"
+        : `${auth.payer.name} routes through the "${requiredPortal}" portal, which isn't connected yet — submit manually`
+    );
+  }
+
+  const payload = buildPayload(auth, policy?.portalPayerName);
 
   const [submission] = await db
     .insert(portalSubmissions)

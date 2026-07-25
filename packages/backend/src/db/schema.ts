@@ -622,6 +622,13 @@ export const clearinghousePayers = pgTable(
        * wizard "CAROLINA COMPLETE HEALTH"). Portal recipes select by this.
        */
       portalPayerName?: string;
+      /**
+       * Which portal files this payer's auths when no API route exists.
+       * Unset = availity_essentials (the default portal). "manual" = no
+       * automated portal path (e.g. Healthy Blue therapy → Carelon, until a
+       * carelon_mbm recipe exists) — the ladder stops at "submit manually".
+       */
+      portalKey?: "availity_essentials" | "carelon_mbm" | "manual";
       notes?: string;
     }>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
