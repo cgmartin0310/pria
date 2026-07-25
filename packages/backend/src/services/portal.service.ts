@@ -176,6 +176,13 @@ function buildPayload(auth: {
       name: auth.practice.name,
       npi: auth.practice.npi,
       phone: auth.practice.phone ?? undefined,
+      fax: auth.practice.fax ?? undefined,
+      address: auth.practice.address ?? undefined,
+    },
+    referringProvider: {
+      firstName: auth.patient.referringProviderFirstName ?? undefined,
+      lastName: auth.patient.referringProviderLastName ?? undefined,
+      npi: auth.patient.referringProviderNpi ?? undefined,
     },
     diagnoses,
     cptCodes: auth.cptCodes ?? [],

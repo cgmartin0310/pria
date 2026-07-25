@@ -35,6 +35,15 @@ const createPatientSchema = z.object({
   subscriberGender: z.enum(["M", "F", "U"]).optional(),
   subscriberAddress: addressSchema.optional(),
 
+  // Referring physician (usually the PCP) — required by payer portals for
+  // therapy auths ("Requesting Provider")
+  referringProviderFirstName: z.string().max(100).optional(),
+  referringProviderLastName: z.string().max(100).optional(),
+  referringProviderNpi: z
+    .string()
+    .regex(/^\d{10}$/, "NPI must be exactly 10 digits")
+    .optional(),
+
   // Clinical
   diagnosisCodes: z.array(z.string()).default([]),
 });

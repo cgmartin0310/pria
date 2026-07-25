@@ -44,10 +44,23 @@ export interface PortalSubmissionPayload {
     npi: string;
     taxonomyCode?: string;
   };
+  /** Referring physician (usually the PCP) — the portal's "Requesting Provider". */
+  referringProvider?: {
+    firstName?: string;
+    lastName?: string;
+    npi?: string;
+  };
   practice: {
     name: string;
     npi: string;
     phone?: string;
+    /** Secure fax — payers send decision letters here when portals ask for it. */
+    fax?: string;
+    /**
+     * Street line used to disambiguate multi-location NPI search results in
+     * portals (e.g. Availity's provider-search rows differ only by address).
+     */
+    address?: { street: string; city: string; state: string; zip: string };
   };
   diagnoses: string[];
   cptCodes: string[];

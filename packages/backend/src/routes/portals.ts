@@ -135,16 +135,26 @@ export async function portalRoutes(app: FastifyInstance) {
   // schema-validated, and navigate URLs must stay on the portal's own hosts.
 
   const selector = z.string().min(1).max(1000);
+  const note = z.string().max(500).optional();
+  const binding = z.string().max(200).optional();
+  const timeoutMs = z.number().int().min(100).max(120_000).optional();
+  const transform = z.enum(["dateMMDDYYYY", "digits"]).optional();
   const stepSchema = z.discriminatedUnion("action", [
-    z.object({ action: z.literal("navigate"), url: z.string().url().max(2000), note: z.string().max(500).optional() }),
-    z.object({ action: z.literal("waitFor"), selector, timeoutMs: z.number().int().min(100).max(120_000).optional(), note: z.string().max(500).optional() }),
-    z.object({ action: z.literal("click"), selector, note: z.string().max(500).optional() }),
-    z.object({ action: z.literal("type"), selector, value: z.string().max(2000).optional(), binding: z.string().max(200).optional(), note: z.string().max(500).optional() }),
-    z.object({ action: z.literal("select"), selector, value: z.string().max(2000).optional(), binding: z.string().max(200).optional(), note: z.string().max(500).optional() }),
-    z.object({ action: z.literal("check"), selector, note: z.string().max(500).optional() }),
-    z.object({ action: z.literal("captureText"), selector, store: z.literal("confirmationNumber"), note: z.string().max(500).optional() }),
-    z.object({ action: z.literal("pauseForHuman"), reason: z.string().min(1).max(500), note: z.string().max(500).optional() }),
-    z.object({ action: z.literal("submit"), selector, note: z.string().max(500).optional() }),
+    z.object({ action: z.literal("navigate"), url: z.string().url().max(2000), note }),
+    z.object({ action: z.literal("useFrame"), urlIncludes: z.string().max(500).optional(), timeoutMs, note }),
+    z.object({ action: z.literal("waitFor"), selector, timeoutMs, note }),
+    z.object({ action: z.literal("click"), selector, note }),
+    z.object({ action: z.literal("clickIfPresent"), selector, timeoutMs, note }),
+    z.object({ action: z.literal("clickByText"), text: z.string().max(500).optional(), binding, within: selector.optional(), note }),
+    z.object({ action: z.literal("clickInRow"), selector, text: z.string().max(500).optional(), binding, note }),
+    z.object({ action: z.literal("type"), selector, value: z.string().max(2000).optional(), binding, transform, note }),
+    z.object({ action: z.literal("typeActive"), value: z.string().max(2000).optional(), binding, transform, note }),
+    z.object({ action: z.literal("press"), key: z.string().min(1).max(30), note }),
+    z.object({ action: z.literal("select"), selector, value: z.string().max(2000).optional(), binding, note }),
+    z.object({ action: z.literal("check"), selector, note }),
+    z.object({ action: z.literal("captureText"), selector, store: z.literal("confirmationNumber"), note }),
+    z.object({ action: z.literal("pauseForHuman"), reason: z.string().min(1).max(500), note }),
+    z.object({ action: z.literal("submit"), selector, note }),
   ]);
 
   const recipeSchema = z.object({

@@ -23,7 +23,15 @@ export interface PortalSubmissionPayload {
     relationshipCode?: string;
   };
   provider: { firstName?: string; lastName: string; npi: string; taxonomyCode?: string };
-  practice: { name: string; npi: string; phone?: string };
+  /** Referring physician (usually the PCP) — the portal's "Requesting Provider". */
+  referringProvider?: { firstName?: string; lastName?: string; npi?: string };
+  practice: {
+    name: string;
+    npi: string;
+    phone?: string;
+    fax?: string;
+    address?: { street: string; city: string; state: string; zip: string };
+  };
   diagnoses: string[];
   cptCodes: string[];
   requestedVisits?: number;
@@ -32,11 +40,19 @@ export interface PortalSubmissionPayload {
   clinicalNotes?: string;
 }
 
+export type RecipeTransform = "dateMMDDYYYY" | "digits";
+
 export type RecipeStep =
   | { action: "navigate"; url: string; note?: string }
+  | { action: "useFrame"; urlIncludes?: string; timeoutMs?: number; note?: string }
   | { action: "waitFor"; selector: string; timeoutMs?: number; note?: string }
   | { action: "click"; selector: string; note?: string }
-  | { action: "type"; selector: string; value?: string; binding?: string; note?: string }
+  | { action: "clickIfPresent"; selector: string; timeoutMs?: number; note?: string }
+  | { action: "clickByText"; text?: string; binding?: string; within?: string; note?: string }
+  | { action: "clickInRow"; selector: string; text?: string; binding?: string; note?: string }
+  | { action: "type"; selector: string; value?: string; binding?: string; transform?: RecipeTransform; note?: string }
+  | { action: "typeActive"; value?: string; binding?: string; transform?: RecipeTransform; note?: string }
+  | { action: "press"; key: string; note?: string }
   | { action: "select"; selector: string; value?: string; binding?: string; note?: string }
   | { action: "check"; selector: string; note?: string }
   | { action: "captureText"; selector: string; store: "confirmationNumber"; note?: string }

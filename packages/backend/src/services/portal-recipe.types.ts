@@ -18,16 +18,95 @@
  */
 export type RecipeBinding = string;
 
+/**
+ * Value transforms applied after binding resolution, before typing.
+ * dateMMDDYYYY: "2026-07-24" → "07/24/2026" (portals rarely take ISO dates).
+ * digits: strip non-digits — for masked phone/fax inputs that self-format.
+ */
+export type RecipeTransform = "dateMMDDYYYY" | "digits";
+
+/**
+ * Selector note: bare `#id` selectors containing dots (Availity uses ids like
+ * `search.requestingProvider.npi`) are auto-rewritten by the replay engine to
+ * `[id="..."]` attribute form. Write compound id+class selectors as
+ * `[id="x"].cls` explicitly if ever needed.
+ */
 export type RecipeStep =
   | { action: "navigate"; url: string; note?: string }
+  | {
+      /**
+       * Target subsequent steps at the iframe whose URL contains `urlIncludes`
+       * (Availity apps render inside a clip-ui iframe). Omit to return to the
+       * top-level page. Waits up to timeoutMs for the frame to appear.
+       */
+      action: "useFrame";
+      urlIncludes?: string;
+      timeoutMs?: number;
+      note?: string;
+    }
   | { action: "waitFor"; selector: string; timeoutMs?: number; note?: string }
   | { action: "click"; selector: string; note?: string }
+  | {
+      /**
+       * Click if the selector appears within timeoutMs; continue silently if it
+       * doesn't. For conditional interstitials (e.g. Anthem ICR routing page).
+       */
+      action: "clickIfPresent";
+      selector: string;
+      timeoutMs?: number;
+      note?: string;
+    }
+  | {
+      /**
+       * Click the first visible element containing the text (literal or bound).
+       * The way to drive Select2 dropdowns, whose generated ids are unstable:
+       * click the closed control (by its stable container/text), then
+       * clickByText the option.
+       */
+      action: "clickByText";
+      text?: string;
+      binding?: RecipeBinding;
+      /** Optional selector to scope the text search. */
+      within?: string;
+      note?: string;
+    }
+  | {
+      /**
+       * Among elements matching `selector`, click the one whose enclosing row
+       * contains the text (e.g. pick the practice location out of a
+       * multi-address NPI result list by street address). Fails — pausing for a
+       * human — if no row matches.
+       */
+      action: "clickInRow";
+      selector: string;
+      text?: string;
+      binding?: RecipeBinding;
+      note?: string;
+    }
   | {
       action: "type";
       selector: string;
       /** Literal text, or a binding to a payload value (one of the two). */
       value?: string;
       binding?: RecipeBinding;
+      transform?: RecipeTransform;
+      note?: string;
+    }
+  | {
+      /**
+       * Type into whatever element currently has focus — for inputs whose ids
+       * are generated per-render (Select2 search boxes).
+       */
+      action: "typeActive";
+      value?: string;
+      binding?: RecipeBinding;
+      transform?: RecipeTransform;
+      note?: string;
+    }
+  | {
+      /** Press a keyboard key (e.g. "Enter", "Tab", "Escape"). */
+      action: "press";
+      key: string;
       note?: string;
     }
   | {

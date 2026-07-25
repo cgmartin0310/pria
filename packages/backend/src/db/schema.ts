@@ -232,6 +232,14 @@ export const patients = pgTable(
       zip: string;
     }>(),
 
+    // ─ Referring physician (usually the PCP) ─
+    // Payer portals ask for the ordering/referring physician on therapy auths
+    // (Availity's "Requesting Provider" step) — distinct from the rendering
+    // therapist and from the practice.
+    referringProviderFirstName: varchar("referring_provider_first_name", { length: 100 }),
+    referringProviderLastName: varchar("referring_provider_last_name", { length: 100 }),
+    referringProviderNpi: varchar("referring_provider_npi", { length: 10 }),
+
     // ─ Clinical ─
     diagnosisCodes: jsonb("diagnosis_codes")
       .notNull()

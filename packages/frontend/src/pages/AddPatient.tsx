@@ -41,6 +41,10 @@ interface FormState {
   subscriberGender: string;
   subscriberAddress: AddressFields;
   subscriberSameAddress: boolean;
+  // Referring physician (usually the PCP)
+  referringProviderFirstName: string;
+  referringProviderLastName: string;
+  referringProviderNpi: string;
   // Diagnosis codes
   diagnosisCodes: string[];
 }
@@ -67,6 +71,9 @@ const INITIAL_FORM: FormState = {
   subscriberGender: "",
   subscriberAddress: { ...EMPTY_ADDRESS },
   subscriberSameAddress: false,
+  referringProviderFirstName: "",
+  referringProviderLastName: "",
+  referringProviderNpi: "",
   diagnosisCodes: [],
 };
 
@@ -370,6 +377,14 @@ export default function AddPatient() {
         if (form.subscriberAddress.street.trim()) payload["subscriberAddress"] = form.subscriberAddress;
       }
 
+      // Referring physician (usually the PCP)
+      if (form.referringProviderFirstName.trim())
+        payload["referringProviderFirstName"] = form.referringProviderFirstName.trim();
+      if (form.referringProviderLastName.trim())
+        payload["referringProviderLastName"] = form.referringProviderLastName.trim();
+      if (form.referringProviderNpi.trim())
+        payload["referringProviderNpi"] = form.referringProviderNpi.trim();
+
       await patientsApi.create(payload);
       navigate("/patients");
     } catch (err) {
@@ -640,7 +655,48 @@ export default function AddPatient() {
           </Card>
         )}
 
-        {/* ── Section 5: Diagnosis Codes ── */}
+        {/* ── Section 5: Referring Physician ── */}
+        <Card>
+          <CardHeader>
+            <div>
+              <h3 className="font-medium text-slate-900">Referring Physician</h3>
+              <p className="text-sm text-slate-500 mt-0.5">
+                The physician who ordered therapy — usually the patient's primary
+                care doctor. Some payers require this on prior auths.
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <Field label="First Name">
+                <Input
+                  placeholder="Jane"
+                  value={form.referringProviderFirstName}
+                  onChange={(e) => set("referringProviderFirstName", e.target.value)}
+                />
+              </Field>
+              <Field label="Last Name">
+                <Input
+                  placeholder="Smith"
+                  value={form.referringProviderLastName}
+                  onChange={(e) => set("referringProviderLastName", e.target.value)}
+                />
+              </Field>
+              <Field label="NPI" error={errors["referringProviderNpi"]}>
+                <Input
+                  placeholder="10-digit NPI"
+                  maxLength={10}
+                  value={form.referringProviderNpi}
+                  onChange={(e) =>
+                    set("referringProviderNpi", e.target.value.replace(/\D/g, ""))
+                  }
+                />
+              </Field>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Section 6: Diagnosis Codes ── */}
         <Card>
           <CardHeader>
             <h3 className="font-medium text-slate-900">Diagnosis Codes</h3>
