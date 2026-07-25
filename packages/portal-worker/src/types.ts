@@ -38,6 +38,8 @@ export interface PortalSubmissionPayload {
   serviceLevelCode?: "E" | "U";
   diagnoses: string[];
   cptCodes: string[];
+  /** Per-procedure: units per visit (PT/OT timed 15-min units; speech = 1). */
+  procedures?: { code: string; units: number }[];
   requestedVisits?: number;
   startDate?: string;
   endDate?: string;

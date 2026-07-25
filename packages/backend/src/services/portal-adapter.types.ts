@@ -78,6 +78,11 @@ export interface PortalSubmissionPayload {
   serviceLevelCode?: "E" | "U";
   diagnoses: string[];
   cptCodes: string[];
+  /**
+   * Per-procedure entry for portal forms. units = units per visit: PT/OT CPTs
+   * are timed in 15-minute units (60-min session → 4); speech is untimed → 1.
+   */
+  procedures?: { code: string; units: number }[];
   requestedVisits?: number;
   startDate?: string;
   endDate?: string;
