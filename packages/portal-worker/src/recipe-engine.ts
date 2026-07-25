@@ -1,5 +1,5 @@
 import type { Frame, Page } from "playwright-core";
-import type { PortalOutcome, PortalSubmissionPayload, RecipeStep } from "./types.js";
+import type { PortalOutcome, PortalSubmissionPayload, RecipeStep, RecipeTransform } from "./types.js";
 
 /**
  * Hosts a recipe may navigate to, per portal — defense-in-depth mirror of the
@@ -23,32 +23,23 @@ function isAllowedUrl(portalKey: string, url: string): boolean {
   }
 }
 
-/** Resolve a value binding like "patient.memberId" or "diagnoses.0" from the payload. */
-function resolveBinding(binding: string, payload: PortalSubmissionPayload): string {
+/** Resolve a dotted path like "patient.memberId" or "diagnoses.0" from the payload. */
+function resolvePath(path: string, payload: PortalSubmissionPayload): unknown {
   let cur: unknown = payload;
-  for (const key of binding.split(".")) {
-    if (cur == null) return "";
+  for (const key of path.split(".")) {
+    if (cur == null) return undefined;
     cur = Array.isArray(cur) ? cur[Number(key)] : (cur as Record<string, unknown>)[key];
   }
-  if (cur == null) return "";
-  return String(cur);
+  return cur;
 }
 
-function applyTransform(value: string, transform?: "dateMMDDYYYY" | "digits"): string {
+function applyTransform(value: string, transform?: RecipeTransform): string {
   if (transform === "dateMMDDYYYY") {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
     if (m) return `${m[2]}/${m[3]}/${m[1]}`;
   }
   if (transform === "digits") return value.replace(/\D/g, "");
   return value;
-}
-
-function valueFor(
-  step: { value?: string; binding?: string; transform?: "dateMMDDYYYY" | "digits" },
-  payload: PortalSubmissionPayload
-): string {
-  const raw = step.binding ? resolveBinding(step.binding, payload) : (step.value ?? "");
-  return applyTransform(raw, step.transform);
 }
 
 /**
@@ -128,6 +119,12 @@ export async function snap(page: Page): Promise<string | undefined> {
   }
 }
 
+/** Mutable replay state threaded through nested step execution. */
+interface ReplayState {
+  target: Target;
+  confirmationNumber: string | null;
+}
+
 /**
  * Execute a learned recipe against an already-authenticated page.
  *
@@ -141,8 +138,28 @@ export async function runRecipe(
   steps: RecipeStep[],
   payload: PortalSubmissionPayload
 ): Promise<PortalOutcome> {
-  let confirmationNumber: string | null = null;
-  let target: Target = page;
+  const state: ReplayState = { target: page, confirmationNumber: null };
+  const outcome = await execSteps(page, portalKey, steps, payload, state, undefined);
+  return outcome ?? { kind: "submitted", confirmationNumber: state.confirmationNumber };
+}
+
+/** Runs steps in order; returns a terminal outcome, or null to keep going. */
+async function execSteps(
+  page: Page,
+  portalKey: string,
+  steps: RecipeStep[],
+  payload: PortalSubmissionPayload,
+  state: ReplayState,
+  idx: number | undefined
+): Promise<PortalOutcome | null> {
+  // Inside a forEach, "{i}" in selectors and bindings becomes the index.
+  const sub = (s: string): string => (idx === undefined ? s : s.replaceAll("{i}", String(idx)));
+  const valueFor = (step: { value?: string; binding?: string; transform?: RecipeTransform }): string => {
+    const raw = step.binding
+      ? String(resolvePath(sub(step.binding), payload) ?? "")
+      : (step.value ?? "");
+    return applyTransform(raw, step.transform);
+  };
 
   for (const step of steps) {
     try {
@@ -156,24 +173,24 @@ export async function runRecipe(
           }
           await page.goto(step.url, { waitUntil: "domcontentloaded" });
           // Navigation detaches frames — never leave target on a dead frame.
-          target = page;
+          state.target = page;
           break;
         case "useFrame":
-          target = step.urlIncludes
+          state.target = step.urlIncludes
             ? await findFrame(page, step.urlIncludes, step.timeoutMs ?? 15_000)
             : page;
           break;
         case "waitFor":
-          await target.waitForSelector(fixSelector(step.selector), {
+          await state.target.waitForSelector(fixSelector(sub(step.selector)), {
             timeout: step.timeoutMs ?? 15_000,
           });
           break;
         case "click":
-          await target.click(fixSelector(step.selector));
+          await state.target.click(fixSelector(sub(step.selector)));
           break;
         case "clickIfPresent": {
-          const el = await target
-            .waitForSelector(fixSelector(step.selector), {
+          const el = await state.target
+            .waitForSelector(fixSelector(sub(step.selector)), {
               timeout: step.timeoutMs ?? 3_000,
             })
             .catch(() => null);
@@ -181,25 +198,27 @@ export async function runRecipe(
           break;
         }
         case "clickByText": {
-          const text = valueFor(step, payload) || step.text || "";
+          const text = valueFor(step) || step.text || "";
           if (!text) throw new Error("clickByText: no text or binding value");
-          const scope = step.within ? target.locator(fixSelector(step.within)) : target;
-          await scope.getByText(text, { exact: false }).first().click();
+          const scope = step.within
+            ? state.target.locator(fixSelector(sub(step.within)))
+            : state.target;
+          await scope.getByText(sub(text), { exact: false }).first().click();
           break;
         }
         case "clickInRow":
           await clickInRow(
-            target,
-            fixSelector(step.selector),
-            valueFor(step, payload) || step.text || ""
+            state.target,
+            fixSelector(sub(step.selector)),
+            valueFor(step) || step.text || ""
           );
           break;
         case "type":
-          await target.fill(fixSelector(step.selector), valueFor(step, payload));
+          await state.target.fill(fixSelector(sub(step.selector)), valueFor(step));
           break;
         case "typeActive":
           // Keyboard is page-level; it reaches the focused element in any frame.
-          await page.keyboard.type(valueFor(step, payload), { delay: 30 });
+          await page.keyboard.type(valueFor(step), { delay: 30 });
           break;
         case "press":
           await page.keyboard.press(step.key);
@@ -207,16 +226,26 @@ export async function runRecipe(
         case "select":
           // force: Select2-style widgets hide the real <select>; selectOption
           // still fires the change event those widgets listen for.
-          await target.selectOption(fixSelector(step.selector), valueFor(step, payload), {
+          await state.target.selectOption(fixSelector(sub(step.selector)), valueFor(step), {
             force: true,
           });
           break;
         case "check":
-          await target.check(fixSelector(step.selector));
+          await state.target.check(fixSelector(sub(step.selector)));
           break;
         case "captureText": {
-          const text = (await target.textContent(fixSelector(step.selector)))?.trim() ?? null;
-          if (step.store === "confirmationNumber") confirmationNumber = text;
+          const text =
+            (await state.target.textContent(fixSelector(sub(step.selector))))?.trim() ?? null;
+          if (step.store === "confirmationNumber") state.confirmationNumber = text;
+          break;
+        }
+        case "forEach": {
+          const list = resolvePath(sub(step.list), payload);
+          const length = Array.isArray(list) ? list.length : 0;
+          for (let i = step.startIndex ?? 0; i < length; i++) {
+            const outcome = await execSteps(page, portalKey, step.steps, payload, state, i);
+            if (outcome) return outcome;
+          }
           break;
         }
         case "pauseForHuman":
@@ -226,7 +255,7 @@ export async function runRecipe(
             screenshot: await snap(page),
           };
         case "submit":
-          await target.click(fixSelector(step.selector));
+          await state.target.click(fixSelector(sub(step.selector)));
           break;
       }
     } catch (err) {
@@ -243,7 +272,7 @@ export async function runRecipe(
     }
   }
 
-  return { kind: "submitted", confirmationNumber };
+  return null;
 }
 
 /**

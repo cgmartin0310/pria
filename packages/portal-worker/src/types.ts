@@ -58,6 +58,7 @@ export type RecipeStep =
   | { action: "select"; selector: string; value?: string; binding?: string; note?: string }
   | { action: "check"; selector: string; note?: string }
   | { action: "captureText"; selector: string; store: "confirmationNumber"; note?: string }
+  | { action: "forEach"; list: string; startIndex?: number; steps: RecipeStep[]; note?: string }
   | { action: "pauseForHuman"; reason: string; note?: string }
   | { action: "submit"; selector: string; note?: string };
 

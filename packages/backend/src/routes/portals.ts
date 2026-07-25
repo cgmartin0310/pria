@@ -139,7 +139,7 @@ export async function portalRoutes(app: FastifyInstance) {
   const binding = z.string().max(200).optional();
   const timeoutMs = z.number().int().min(100).max(120_000).optional();
   const transform = z.enum(["dateMMDDYYYY", "digits"]).optional();
-  const stepSchema = z.discriminatedUnion("action", [
+  const stepSchema: z.ZodTypeAny = z.lazy(() => z.discriminatedUnion("action", [
     z.object({ action: z.literal("navigate"), url: z.string().url().max(2000), note }),
     z.object({ action: z.literal("useFrame"), urlIncludes: z.string().max(500).optional(), timeoutMs, note }),
     z.object({ action: z.literal("waitFor"), selector, timeoutMs, note }),
@@ -153,9 +153,16 @@ export async function portalRoutes(app: FastifyInstance) {
     z.object({ action: z.literal("select"), selector, value: z.string().max(2000).optional(), binding, note }),
     z.object({ action: z.literal("check"), selector, note }),
     z.object({ action: z.literal("captureText"), selector, store: z.literal("confirmationNumber"), note }),
+    z.object({
+      action: z.literal("forEach"),
+      list: z.string().min(1).max(100),
+      startIndex: z.number().int().min(0).max(50).optional(),
+      steps: z.array(stepSchema).min(1).max(50),
+      note,
+    }),
     z.object({ action: z.literal("pauseForHuman"), reason: z.string().min(1).max(500), note }),
     z.object({ action: z.literal("submit"), selector, note }),
-  ]);
+  ]));
 
   const recipeSchema = z.object({
     portalKey: z.string().min(1).max(50),
@@ -186,7 +193,10 @@ export async function portalRoutes(app: FastifyInstance) {
 
       // Navigation is confined to the portal's own hosts — a recipe runs in an
       // authenticated session with PHI bound in, so anywhere else is exfil.
-      for (const step of parsed.data.steps) {
+      // Walk nested forEach steps too; a loop must not hide a navigate.
+      const flatten = (steps: RecipeStep[]): RecipeStep[] =>
+        steps.flatMap((s) => (s.action === "forEach" ? [s, ...flatten(s.steps)] : [s]));
+      for (const step of flatten(parsed.data.steps as RecipeStep[])) {
         if (
           step.action === "navigate" &&
           !isAllowedRecipeUrl(parsed.data.portalKey, step.url)

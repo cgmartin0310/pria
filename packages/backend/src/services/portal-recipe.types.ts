@@ -125,6 +125,21 @@ export type RecipeStep =
       note?: string;
     }
   | {
+      /**
+       * Repeat `steps` once per item of a payload array (e.g. "diagnoses",
+       * "cptCodes"). Inside, the literal "{i}" in bindings and selectors is
+       * replaced with the current index — e.g. binding "diagnoses.{i}",
+       * selector "[id=\"procedures.{i}.serviceQuantity\"]". startIndex lets a
+       * recipe handle item 0 inline (the form renders one row by default) and
+       * loop "Add another" from index 1.
+       */
+      action: "forEach";
+      list: string;
+      startIndex?: number;
+      steps: RecipeStep[];
+      note?: string;
+    }
+  | {
       /** Pause and hand off to a human (e.g. final review, or an MFA screen). */
       action: "pauseForHuman";
       reason: string;
