@@ -34,6 +34,8 @@ export interface PortalSubmissionPayload {
   };
   serviceType?: { code?: string; label?: string };
   placeOfService?: { code?: string; label?: string };
+  /** Portal urgency: "E" Elective or "U" Urgent (not the X12 UM06 code). */
+  serviceLevelCode?: "E" | "U";
   diagnoses: string[];
   cptCodes: string[];
   requestedVisits?: number;

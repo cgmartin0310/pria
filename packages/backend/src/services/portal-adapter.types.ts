@@ -70,6 +70,12 @@ export interface PortalSubmissionPayload {
   serviceType?: { code?: string; label?: string };
   /** CMS POS — 11 "Office" or 12 "Home" for therapy practices. */
   placeOfService?: { code?: string; label?: string };
+  /**
+   * Portal urgency: "E" Elective or "U" Urgent. NOT the X12 UM06 code — the
+   * portal's E means Elective while X12's E means Emergency; translated in
+   * buildPayload.
+   */
+  serviceLevelCode?: "E" | "U";
   diagnoses: string[];
   cptCodes: string[];
   requestedVisits?: number;

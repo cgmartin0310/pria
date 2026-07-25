@@ -170,6 +170,7 @@ function buildPayload(auth: {
   clinicalNotes: string | null;
   serviceTypeCode: string | null;
   placeOfServiceCode: string | null;
+  levelOfServiceCode: string | null;
 }, portalPayerName?: string): PortalSubmissionPayload {
   const diagnoses = Array.from(
     new Set([...(auth.icdCodes ?? []), ...(auth.patient.diagnosisCodes ?? [])])
@@ -215,6 +216,10 @@ function buildPayload(auth: {
           label: PLACE_OF_SERVICE_LABELS[auth.placeOfServiceCode],
         }
       : undefined,
+    // X12 UM06 "U"/"E" both mean expedite; everything else (R routine, null)
+    // is an elective request — which the portal spells "E".
+    serviceLevelCode:
+      auth.levelOfServiceCode === "U" || auth.levelOfServiceCode === "E" ? "U" : "E",
     diagnoses,
     cptCodes: auth.cptCodes ?? [],
     requestedVisits: auth.requestedVisits,
