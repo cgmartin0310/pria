@@ -28,14 +28,22 @@ snapshots. Bindings in `{braces}` refer to `PortalSubmissionPayload` paths.
 2. `useFrame onboarding-ui-apps` → click `#NAVIGATION-authorizations` (A&R hub).
 3. Click "New Request" → wizard Step 1.
 
-## Step 1 — Start an Authorization  ⚠ hidden-select ids NOT yet captured
+## Step 1 — Start an Authorization  (payer page CAPTURED; patient page pending)
 
-- Organization Select2 (single-org account: likely preselected "Kidology Inc")
-- Transaction Type Select2 → always **"Outpatient Authorization"**
-- Payer Select2 → `{payerName}` (payer-rules `portalPayerName` override wins:
-  e.g. directory "CENTENE" → dropdown "CAROLINA COMPLETE HEALTH"; Healthy Blue
-  therapy auths must select **"Carelon Medical Benefits Management"** — the
-  generic Healthy Blue flow rejects therapy CPTs, see Payer routing below)
+Hidden selects (stable ids, captured 2026-07-25):
+
+- `select [id="organization"]` ← `{practice.name}` (option "865953 | Kidology
+  Inc" — normalized label match absorbs the "Kidology, Inc" comma)
+- `select [id="requestType"]` ← `HS` (Outpatient Authorization; AR = Inpatient)
+- `select [id="payer"]` ← `{payerName}` by LABEL (values are portal-private:
+  602 = HEALTHY BLUE NORTH CAROLINA, CAROLINACOMPLETEHEALTH = CAROLINA
+  COMPLETE HEALTH, A6010 = WELLCARE OF NORTH CAROLINA, A6018 = TRILLIUM,
+  A6001 = AMBETTER). `portalPayerName` override wins (directory "CENTENE" →
+  "CAROLINA COMPLETE HEALTH").
+- `select [id="template"]` — empty, ignore.
+- **Carelon Medical Benefits Management is NOT in this dropdown** (only
+  "Carelon Behavioral Health", a different product) — Healthy Blue therapy
+  cannot be routed here; see Payer routing below.
 - Patient screen (after payer): Review Type = **"Medical Services"** (constant);
   select patient by member id — `[id="subscriber.memberId"]` ←
   `{patient.memberId}`; `[id="patient.birthDate"]` ← `{patient.dob}`
@@ -147,10 +155,12 @@ Rendering provider (= treating therapist, Type 1):
 - **Healthy Blue NC**: generic wizard REJECTS therapy CPTs (97530 error:
   "Precertification for this code can be submitted … choosing the link
   Carelon Medical Benefits Management or through Provider Portal at
-  www.providerportal.com"). Route: select payer **"Carelon Medical Benefits
-  Management"** in Step 1 (flow past that unverified) — or Carelon's own
-  portal (rehab.carelonmedicalbenefitsmanagement.com, would need its own
-  recipe). Set via Payer Rules → portalPayerName.
+  www.providerportal.com"). CONFIRMED (Chris, 2026-07-25): Carelon MBM is a
+  SEPARATE portal, not on Availity — Healthy Blue therapy auths need a
+  dedicated Carelon recipe (portalKey e.g. `carelon_mbm`,
+  providerportal.com / rehab.carelonmedicalbenefitsmanagement.com, own
+  credentials via a second portal connection). The availity_essentials
+  recipe does NOT cover Healthy Blue therapy.
 - **Carolina Complete (Centene)**: directory name "CENTENE"; wizard dropdown
   "CAROLINA COMPLETE…" — portalPayerName override. 6-month auths, ZERO
   unmanaged visits (auth before first treatment; eval exempt).
