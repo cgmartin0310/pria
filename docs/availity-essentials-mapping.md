@@ -44,11 +44,15 @@ Hidden selects (stable ids, captured 2026-07-25):
 - **Carelon Medical Benefits Management is NOT in this dropdown** (only
   "Carelon Behavioral Health", a different product) — Healthy Blue therapy
   cannot be routed here; see Payer routing below.
-- Patient screen (after payer): Review Type = **"Medical Services"** (constant);
+- Patient screen (after payer): Review Type = **"Medical Services"** (constant;
+  its select id NOT in the dump — may be preselected/radio, verify);
   select patient by member id — `[id="subscriber.memberId"]` ←
   `{patient.memberId}`; `[id="patient.birthDate"]` ← `{patient.dob}`
-  (mm/dd/yyyy); relationship Select2 ← `{patient.relationshipCode}`
-  (18 Self / 01 Spouse / 19 Child / G8 Other)
+  (mm/dd/yyyy, masked → click + typeActive);
+  `select [id="patient.subscriberRelationshipCode"]` ←
+  `{patient.relationshipCode}` (X12 values; PAYER-FILTERED — this Medicaid
+  payer offers only "18 | Self"); `select [id="genderCode"]` ←
+  `{patient.gender}` (F/M/U)
 - Next fires a REAL-TIME ELIGIBILITY CHECK (result banner, e.g. "Status A")
 - Anthem payers: ICR routing interstitial may appear
   (`[id="radio.appeals"]`, `[id="radio.rx"]`, `[id="radio.other"]`) —
@@ -62,9 +66,13 @@ Per biller research: the OPR NPI that must match the claim's referring
 provider. NOT the group. (Availity accepted Group + Kidology NPI here in
 testing, but that risks claim mismatches.)
 
-- Search By: defaults to NPI ✓
-- Provider Type Select2: needs **"Provider"** (individual) for the referring
-  physician (hidden select id not captured — TODO with step-1 sweep)
+- Search By: `[id="search.requestingProvider.searchBy"]` — defaults to NPI ✓
+- Provider Type: `select [id="search.roleCode"]` ← **P3** (Provider,
+  individual) for the referring physician; FA = Facility
+- ⚠ The wizard KEEPS PRIOR STEPS' DOM ATTACHED as you advance — repeated
+  controls (`input[value="Retrieve Provider Info"]`,
+  `input[id^="selectProvider"]`) must be targeted with `:visible` to avoid
+  hitting a hidden leftover from an earlier step.
 - `[id="search.requestingProvider.npi"]` ← `{referringProvider.npi}`
 - Click `input[value="Retrieve Provider Info"]`
 - Multi-location NPI results: rows with `input[id^="selectProvider"]`
@@ -170,12 +178,16 @@ Rendering provider (= treating therapist, Type 1):
 
 ## Remaining captures before recipe v1 ships
 
-1. Hidden-`<select>` snippet on Step 1 payer page AND patient page (stable
-   ids for organization / transaction type / payer / review type /
-   relationship selects).
-2. Incognito login → MFA screen (code input + submit selectors) — blocks
+1. ~~Step 1 payer page hidden selects~~ ✓ 2026-07-25
+2. ~~Patient page hidden selects~~ ✓ 2026-07-25 (also yielded
+   search.roleCode + DOM-accumulation discovery)
+3. Step 4 diagnosis/procedure/modifier pickers: they are ajax Select2s bound
+   to HIDDEN `<input>`s (absent from the select dump) — capture
+   `input[type=hidden]` + `.select2-container` ids on Step 4 to get their
+   stable container ids (expect `s2id_diagnoses.0.code`-style).
+4. Incognito login → MFA screen (code input + submit selectors) — blocks
    unattended worker login.
-3. Post-submit confirmation page (confirmation-number element) — grab during
+5. Post-submit confirmation page (confirmation-number element) — grab during
    the first manual filing.
-4. Biller confirmations: per-visit vs total units; GP/GO/GN modifiers;
+6. Biller confirmations: per-visit vs total units; GP/GO/GN modifiers;
    attachment requirements per payer; approvals at group vs therapist level.
