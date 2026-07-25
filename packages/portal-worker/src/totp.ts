@@ -38,3 +38,8 @@ export function totp(seed: string, period = 30, digits = 6): string {
     (hmac[offset + 3]! & 0xff);
   return (bin % 10 ** digits).toString().padStart(digits, "0");
 }
+
+/** Seconds until the current TOTP window rolls over. */
+export function totpSecondsRemaining(period = 30): number {
+  return period - (Math.floor(Date.now() / 1000) % period);
+}
