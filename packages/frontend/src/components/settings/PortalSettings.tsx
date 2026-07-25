@@ -254,22 +254,40 @@ function RecipeManager() {
     setError(null);
     setSaved(false);
 
+    // Accept either a bare steps array or a full recipe object
+    // ({ name, portalKey, steps, ... }) — people paste whole recipe files.
     let steps: unknown[];
+    let pastedName: string | undefined;
+    let pastedPortalKey: string | undefined;
     try {
-      steps = JSON.parse(stepsJson);
-      if (!Array.isArray(steps) || steps.length === 0) {
+      const parsed = JSON.parse(stepsJson) as unknown;
+      if (Array.isArray(parsed)) {
+        steps = parsed;
+      } else if (
+        parsed &&
+        typeof parsed === "object" &&
+        Array.isArray((parsed as { steps?: unknown }).steps)
+      ) {
+        const obj = parsed as { steps: unknown[]; name?: string; portalKey?: string };
+        steps = obj.steps;
+        pastedName = typeof obj.name === "string" ? obj.name : undefined;
+        pastedPortalKey = typeof obj.portalKey === "string" ? obj.portalKey : undefined;
+      } else {
         throw new Error("not an array");
       }
+      if (steps.length === 0) throw new Error("empty");
     } catch {
-      setError("Steps must be a JSON array of recipe steps.");
+      setError(
+        "Paste a JSON array of recipe steps, or a full recipe object with a \"steps\" array."
+      );
       return;
     }
 
     setSaving(true);
     try {
       await portalApi.createRecipe({
-        portalKey: "availity_essentials",
-        name: name.trim() || "Availity Essentials auth",
+        portalKey: pastedPortalKey ?? "availity_essentials",
+        name: name.trim() || pastedName || "Availity Essentials auth",
         steps,
         activate,
       });

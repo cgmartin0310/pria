@@ -1,0 +1,449 @@
+[
+ {
+  "action": "clickByText",
+  "text": "Patient Registration",
+  "note": "Top nav (main document, before entering the iframe)"
+ },
+ {
+  "action": "clickByText",
+  "text": "Authorizations & Referrals",
+  "note": "Menu item under Patient Registration"
+ },
+ {
+  "action": "useFrame",
+  "urlIncludes": "onboarding-ui-apps",
+  "timeoutMs": 20000,
+  "note": "All A&R apps render in this iframe (clip-ui, later navigates to dashboard-ui)"
+ },
+ {
+  "action": "waitFor",
+  "selector": "#NAVIGATION-authorizations",
+  "timeoutMs": 20000
+ },
+ {
+  "action": "click",
+  "selector": "#NAVIGATION-authorizations",
+  "note": "A&R hub -> Authorizations app"
+ },
+ {
+  "action": "clickByText",
+  "text": "New Request",
+  "note": "Opens the 6-step wizard"
+ },
+ {
+  "action": "waitFor",
+  "selector": "#authWizardNextButton",
+  "timeoutMs": 20000,
+  "note": "Step 1: Start an Authorization"
+ },
+ {
+  "action": "select",
+  "selector": "#organization",
+  "binding": "practice.name",
+  "note": "Engine's normalized label match absorbs 'Kidology, Inc' vs 'Kidology Inc'"
+ },
+ {
+  "action": "select",
+  "selector": "#requestType",
+  "value": "HS",
+  "note": "Outpatient Authorization"
+ },
+ {
+  "action": "select",
+  "selector": "#payer",
+  "binding": "payerName",
+  "note": "By label; Payer Rules portalPayerName override wins (CENTENE -> CAROLINA COMPLETE HEALTH)"
+ },
+ {
+  "action": "click",
+  "selector": "#authWizardNextButton"
+ },
+ {
+  "action": "waitFor",
+  "selector": "#subscriber.memberId",
+  "timeoutMs": 20000,
+  "note": "Patient screen"
+ },
+ {
+  "action": "type",
+  "selector": "#subscriber.memberId",
+  "binding": "patient.memberId"
+ },
+ {
+  "action": "click",
+  "selector": "#patient.birthDate"
+ },
+ {
+  "action": "press",
+  "key": "Control+a"
+ },
+ {
+  "action": "typeActive",
+  "binding": "patient.dob",
+  "transform": "dateMMDDYYYY",
+  "note": "Masked date input"
+ },
+ {
+  "action": "select",
+  "selector": "#genderCode",
+  "binding": "patient.gender",
+  "note": "Skipped if payload gender empty (portal may prefill from eligibility)"
+ },
+ {
+  "action": "select",
+  "selector": "#patient.subscriberRelationshipCode",
+  "binding": "patient.relationshipCode",
+  "note": "X12 values; options are payer-filtered"
+ },
+ {
+  "action": "click",
+  "selector": "#authWizardNextButton",
+  "note": "Fires real-time eligibility check"
+ },
+ {
+  "action": "clickIfPresent",
+  "selector": "#radio.other",
+  "timeoutMs": 4000,
+  "note": "Anthem ICR routing interstitial; absent for most payers"
+ },
+ {
+  "action": "waitFor",
+  "selector": "#search.requestingProvider.npi",
+  "timeoutMs": 30000,
+  "note": "Step 2: Requesting Provider = referring physician (OPR NPI must match claim's referring provider)"
+ },
+ {
+  "action": "select",
+  "selector": "#search.roleCode",
+  "value": "P3",
+  "note": "Provider (individual), not FA Facility"
+ },
+ {
+  "action": "type",
+  "selector": "#search.requestingProvider.npi",
+  "binding": "referringProvider.npi"
+ },
+ {
+  "action": "click",
+  "selector": "input[value=\"Retrieve Provider Info\"]:visible",
+  "note": ":visible — the wizard keeps prior steps' DOM attached"
+ },
+ {
+  "action": "clickIfPresent",
+  "selector": "[id=\"selectProvider0\"]:visible",
+  "timeoutMs": 6000,
+  "note": "Select first result; upgrade to clickInRow if referring physicians multi-locate"
+ },
+ {
+  "action": "waitFor",
+  "selector": "#requestingProvider.phone",
+  "timeoutMs": 20000
+ },
+ {
+  "action": "click",
+  "selector": "#requestingProvider.phone"
+ },
+ {
+  "action": "press",
+  "key": "Control+a"
+ },
+ {
+  "action": "typeActive",
+  "binding": "practice.phone",
+  "transform": "digits",
+  "note": "REQUIRED masked field"
+ },
+ {
+  "action": "click",
+  "selector": "#requestingProvider.fax"
+ },
+ {
+  "action": "typeActive",
+  "binding": "practice.fax",
+  "transform": "digits",
+  "note": "Optional — payer faxes decision letters here; no-op when practice has no fax"
+ },
+ {
+  "action": "click",
+  "selector": "#authWizardNextButton"
+ },
+ {
+  "action": "waitFor",
+  "selector": "#search.renderingProviders.serviceProvider.0.npi",
+  "timeoutMs": 20000,
+  "note": "Step 3: Rendering = treating therapist"
+ },
+ {
+  "action": "select",
+  "selector": "#serviceTypeCode",
+  "binding": "serviceType.code",
+  "note": "PT/AD/AF — portal codes, payload pre-translates X12 AE->PT"
+ },
+ {
+  "action": "select",
+  "selector": "#placeOfServiceCode",
+  "binding": "placeOfService.code",
+  "note": "11 Office / 12 Home"
+ },
+ {
+  "action": "type",
+  "selector": "#search.renderingProviders.serviceProvider.0.npi",
+  "binding": "provider.npi",
+  "note": "Provider type defaults to P3 here"
+ },
+ {
+  "action": "click",
+  "selector": "input[value=\"Retrieve Provider Info\"]:visible"
+ },
+ {
+  "action": "clickInRow",
+  "selector": "input[id^=\"selectProvider\"]:visible",
+  "binding": "practice.address.street",
+  "note": "Pick the practice location by street when the NPI multi-rows"
+ },
+ {
+  "action": "waitFor",
+  "selector": "#renderingProviders.serviceProvider.0.phone",
+  "timeoutMs": 20000
+ },
+ {
+  "action": "click",
+  "selector": "#renderingProviders.serviceProvider.0.phone"
+ },
+ {
+  "action": "press",
+  "key": "Control+a"
+ },
+ {
+  "action": "typeActive",
+  "binding": "practice.phone",
+  "transform": "digits"
+ },
+ {
+  "action": "click",
+  "selector": "#renderingProviders.serviceProvider.0.fax"
+ },
+ {
+  "action": "typeActive",
+  "binding": "practice.fax",
+  "transform": "digits"
+ },
+ {
+  "action": "click",
+  "selector": "#authWizardNextButton",
+  "note": "Facility sub-section intentionally skipped in v1 (optional; biller confirmation pending)"
+ },
+ {
+  "action": "waitFor",
+  "selector": "#fromDate",
+  "timeoutMs": 20000,
+  "note": "Step 4: Service Information"
+ },
+ {
+  "action": "click",
+  "selector": "#fromDate"
+ },
+ {
+  "action": "press",
+  "key": "Control+a"
+ },
+ {
+  "action": "typeActive",
+  "binding": "startDate",
+  "transform": "dateMMDDYYYY",
+  "note": "Overwrites the eligibility prefill"
+ },
+ {
+  "action": "click",
+  "selector": "#toDate"
+ },
+ {
+  "action": "press",
+  "key": "Control+a"
+ },
+ {
+  "action": "typeActive",
+  "binding": "endDate",
+  "transform": "dateMMDDYYYY"
+ },
+ {
+  "action": "type",
+  "selector": "#quantity",
+  "binding": "requestedVisits"
+ },
+ {
+  "action": "select",
+  "selector": "#quantityTypeCode",
+  "value": "VS",
+  "note": "Visits"
+ },
+ {
+  "action": "select",
+  "selector": "#serviceLevelCode",
+  "binding": "serviceLevelCode",
+  "note": "E Elective / U Urgent (portal semantics, payload pre-translated)"
+ },
+ {
+  "action": "click",
+  "selector": "[id=\"s2id_diagnoses.0.code\"]",
+  "note": "Ajax ICD search Select2"
+ },
+ {
+  "action": "typeActive",
+  "binding": "diagnoses.0"
+ },
+ {
+  "action": "wait",
+  "ms": 1500,
+  "note": "Let ajax results load"
+ },
+ {
+  "action": "press",
+  "key": "Enter"
+ },
+ {
+  "action": "forEach",
+  "list": "diagnoses",
+  "startIndex": 1,
+  "steps": [
+   {
+    "action": "clickByText",
+    "text": "Add another diagnosis code"
+   },
+   {
+    "action": "click",
+    "selector": "[id=\"s2id_diagnoses.{i}.code\"]"
+   },
+   {
+    "action": "typeActive",
+    "binding": "diagnoses.{i}"
+   },
+   {
+    "action": "wait",
+    "ms": 1500
+   },
+   {
+    "action": "press",
+    "key": "Enter"
+   }
+  ]
+ },
+ {
+  "action": "click",
+  "selector": "[id=\"s2id_procedures.0.code\"]",
+  "note": "Ajax CPT search Select2"
+ },
+ {
+  "action": "typeActive",
+  "binding": "procedures.0.code"
+ },
+ {
+  "action": "wait",
+  "ms": 1500
+ },
+ {
+  "action": "press",
+  "key": "Enter"
+ },
+ {
+  "action": "select",
+  "selector": "#procedures.0.qualifierCode",
+  "value": "HC",
+  "note": "CPT/HCPCS"
+ },
+ {
+  "action": "type",
+  "selector": "#procedures.0.serviceQuantity",
+  "binding": "procedures.0.units",
+  "note": "Units per visit (PT/OT 15-min units, ST=1) — semantics pending biller confirmation"
+ },
+ {
+  "action": "select",
+  "selector": "#procedures.0.serviceQuantityTypeCode",
+  "value": "FL",
+  "note": "Units"
+ },
+ {
+  "action": "forEach",
+  "list": "procedures",
+  "startIndex": 1,
+  "steps": [
+   {
+    "action": "clickByText",
+    "text": "Add another procedure code"
+   },
+   {
+    "action": "click",
+    "selector": "[id=\"s2id_procedures.{i}.code\"]"
+   },
+   {
+    "action": "typeActive",
+    "binding": "procedures.{i}.code"
+   },
+   {
+    "action": "wait",
+    "ms": 1500
+   },
+   {
+    "action": "press",
+    "key": "Enter"
+   },
+   {
+    "action": "select",
+    "selector": "#procedures.{i}.qualifierCode",
+    "value": "HC"
+   },
+   {
+    "action": "type",
+    "selector": "#procedures.{i}.serviceQuantity",
+    "binding": "procedures.{i}.units"
+   },
+   {
+    "action": "select",
+    "selector": "#procedures.{i}.serviceQuantityTypeCode",
+    "value": "FL"
+   }
+  ]
+ },
+ {
+  "action": "type",
+  "selector": "#providerNotes.0.message",
+  "binding": "clinicalNotes",
+  "note": "Portal caps this around 264 chars — keep notes short until a truncation guard lands"
+ },
+ {
+  "action": "click",
+  "selector": "#authWizardNextButton",
+  "note": "Fires the real-time payer evaluation"
+ },
+ {
+  "action": "waitFor",
+  "selector": "#nextStepsButton",
+  "timeoutMs": 60000,
+  "note": "Step 4 result summary (status banner + Transaction ID). v2: read the status — some payers auto-approve here"
+ },
+ {
+  "action": "click",
+  "selector": "#nextStepsButton"
+ },
+ {
+  "action": "waitFor",
+  "selector": "button:has-text(\"Add File\")",
+  "timeoutMs": 20000,
+  "note": "Step 5: Attachments — skippable; Pria has no doc storage yet"
+ },
+ {
+  "action": "click",
+  "selector": "#authWizardNextButton"
+ },
+ {
+  "action": "waitFor",
+  "selector": "[aria-label=\"step1 memberInfo\"]",
+  "timeoutMs": 20000,
+  "note": "Step 6: Review and Submit (edit links prove the review page rendered)"
+ },
+ {
+  "action": "pauseForHuman",
+  "reason": "Wizard filled through Step 6 review — verify the screenshot, then click Submit in the portal yourself (v1 trust policy: the recipe never clicks Submit). Post-submit confirmation capture lands in v2 once that page is mapped."
+ }
+]
