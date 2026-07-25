@@ -55,6 +55,7 @@ export default function App() {
             <Route path="/authorizations/new" element={<NewAuthorization />} />
             <Route path="/patients" element={<Patients />} />
             <Route path="/patients/new" element={<AddPatient />} />
+            <Route path="/patients/:id/edit" element={<AddPatient />} />
             <Route path="/providers" element={<Providers />} />
             <Route path="/providers/new" element={<AddProvider />} />
             <Route path="/portal-queue" element={<PortalQueue />} />

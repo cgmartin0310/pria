@@ -324,6 +324,13 @@ export interface Patient extends TimestampedEntity {
   /** Subscriber address — maps to 2000C N3 + N4 */
   subscriberAddress?: Address;
 
+  // ── Referring physician (usually the PCP) ──
+  // Payer portals ask for the ordering/referring physician on therapy auths
+  // (Availity's "Requesting Provider" step).
+  referringProviderFirstName?: string | null;
+  referringProviderLastName?: string | null;
+  referringProviderNpi?: string | null;
+
   // ── Clinical ──
   diagnosisCodes: string[];
 }

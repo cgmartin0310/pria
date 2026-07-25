@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { ArrowLeft, X, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { RELATIONSHIP_CODES, COMMON_ICD10_CODES, US_STATES } from "@pria/shared";
 import { patientsApi, payersApi, icd10Api, type Icd10Result } from "@/lib/api.js";
-import type { Payer } from "@pria/shared";
+import type { Patient, Payer } from "@pria/shared";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -204,9 +204,13 @@ function AddressBlock({
 
 export default function AddPatient() {
   const navigate = useNavigate();
+  // With an :id route param the same form edits an existing patient.
+  const { id: editId } = useParams<{ id: string }>();
+  const isEdit = !!editId;
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [payers, setPayers] = useState<Payer[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loadingPatient, setLoadingPatient] = useState(isEdit);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [diagSearch, setDiagSearch] = useState("");
 
@@ -216,6 +220,44 @@ export default function AddPatient() {
       if (res.data) setPayers(res.data);
     }).catch(() => {/* ignore — payers load best-effort */});
   }, []);
+
+  // Edit mode: prefill from the existing record
+  useEffect(() => {
+    if (!editId) return;
+    patientsApi
+      .get(editId)
+      .then((res) => {
+        const p = res.data as Patient & { payerId?: string };
+        if (!p) return;
+        setForm({
+          firstName: p.firstName ?? "",
+          lastName: p.lastName ?? "",
+          middleName: p.middleName ?? "",
+          dob: p.dob ?? "",
+          gender: p.gender ?? "",
+          phone: p.phone ?? "",
+          address: { ...EMPTY_ADDRESS, ...(p.address ?? {}) },
+          payerId: p.payerId ?? "",
+          memberId: p.memberId ?? "",
+          groupNumber: p.groupNumber ?? "",
+          relationshipToSubscriber: p.relationshipToSubscriber ?? "18",
+          subscriberFirstName: p.subscriberFirstName ?? "",
+          subscriberLastName: p.subscriberLastName ?? "",
+          subscriberMiddleName: p.subscriberMiddleName ?? "",
+          subscriberMemberId: p.subscriberMemberId ?? "",
+          subscriberDob: p.subscriberDob ?? "",
+          subscriberGender: p.subscriberGender ?? "",
+          subscriberAddress: { ...EMPTY_ADDRESS, ...(p.subscriberAddress ?? {}) },
+          subscriberSameAddress: false,
+          referringProviderFirstName: p.referringProviderFirstName ?? "",
+          referringProviderLastName: p.referringProviderLastName ?? "",
+          referringProviderNpi: p.referringProviderNpi ?? "",
+          diagnosisCodes: p.diagnosisCodes ?? [],
+        });
+      })
+      .catch(() => {/* stay on empty form; save will fail loudly if id is bad */})
+      .finally(() => setLoadingPatient(false));
+  }, [editId]);
 
   const isSelf = form.relationshipToSubscriber === "18";
 
@@ -385,7 +427,11 @@ export default function AddPatient() {
       if (form.referringProviderNpi.trim())
         payload["referringProviderNpi"] = form.referringProviderNpi.trim();
 
-      await patientsApi.create(payload);
+      if (isEdit && editId) {
+        await patientsApi.update(editId, payload);
+      } else {
+        await patientsApi.create(payload);
+      }
       navigate("/patients");
     } catch (err) {
       console.error("Failed to save patient:", err);
@@ -396,6 +442,10 @@ export default function AddPatient() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
+
+  if (loadingPatient) {
+    return <p className="text-sm text-slate-400">Loading patient…</p>;
+  }
 
   return (
     <div className="space-y-6">
@@ -408,7 +458,9 @@ export default function AddPatient() {
           </Link>
         </Button>
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Add Patient</h2>
+          <h2 className="text-lg font-semibold text-slate-900">
+            {isEdit ? "Edit Patient" : "Add Patient"}
+          </h2>
           <p className="text-sm text-slate-500">Enter patient and insurance information</p>
         </div>
       </div>

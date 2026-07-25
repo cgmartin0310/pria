@@ -164,8 +164,12 @@ export default function Patients() {
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          View
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => navigate(`/patients/${p.id}/edit`)}
+                        >
+                          Edit
                         </Button>
                       </TableCell>
                     </TableRow>
