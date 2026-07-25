@@ -199,6 +199,11 @@ export interface Payer {
   supportsX278: boolean;
   supportsFhir: boolean;
 
+  /** Present on practice-scoped payer listings (from the payer link). */
+  authPolicy?: PayerAuthPolicy | null;
+  /** 278 capability through the practice's clearinghouse link, when listed. */
+  supports278?: boolean;
+
   /**
    * Clearinghouse-specific routing info (optional).
    * Some payers require routing through a specific clearinghouse.
@@ -215,6 +220,20 @@ export interface PayerRulesConfig {
   submissionMethod: "x12" | "portal" | "fax" | "phone";
   avgDecisionDays: number;
   notes: string;
+}
+
+/**
+ * Practice-entered auth policy for a payer — drives New Authorization
+ * defaults. Stored on the practice's payer link, not the shared payer row.
+ */
+export interface PayerAuthPolicy {
+  /** Visits allowed before an auth is required (0 = auth before first treatment). */
+  unmanagedVisits?: number;
+  /** Typical auth window in months (e.g. Healthy Blue: 6). */
+  authPeriodMonths?: number;
+  /** Max visits granted per auth. */
+  maxVisitsPerAuth?: number;
+  notes?: string;
 }
 
 // ─── Patient ─────────────────────────────────────────────────────────────────

@@ -130,6 +130,8 @@ export const patientsApi = {
 export const payersApi = {
   list: () => api.get<ApiResponse<Payer[]>>("/payers"),
   get: (id: string) => api.get<ApiResponse<Payer>>(`/payers/${id}`),
+  updatePolicy: (id: string, policy: unknown) =>
+    api.patch<ApiResponse<unknown>>(`/payers/${id}/policy`, policy),
 };
 
 export const providersApi = {

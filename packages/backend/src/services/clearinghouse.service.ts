@@ -664,6 +664,7 @@ export async function listPracticePayers(practiceId: string) {
       supports278: clearinghousePayers.supports278,
       clearinghousePayerId: clearinghousePayers.clearinghousePayerId,
       clearinghouseId: clearinghousePayers.clearinghouseId,
+      authPolicy: clearinghousePayers.authPolicy,
     })
     .from(payers)
     .innerJoin(clearinghousePayers, eq(clearinghousePayers.payerId, payers.id))
@@ -690,6 +691,38 @@ export async function listPracticePayers(practiceId: string) {
     result.push(r);
   }
   return result;
+}
+
+/**
+ * Set this practice's auth policy for a payer (unmanaged visits, auth window,
+ * visit cap). Updates every link the practice has for that payer — the policy
+ * is about the payer's plan, not the network it's reached through.
+ */
+export async function setPayerAuthPolicy(
+  practiceId: string,
+  payerRowId: string,
+  policy: {
+    unmanagedVisits?: number;
+    authPeriodMonths?: number;
+    maxVisitsPerAuth?: number;
+    notes?: string;
+  }
+) {
+  const updated = await db
+    .update(clearinghousePayers)
+    .set({ authPolicy: policy, updatedAt: new Date() })
+    .where(
+      and(
+        eq(clearinghousePayers.practiceId, practiceId),
+        eq(clearinghousePayers.payerId, payerRowId)
+      )
+    )
+    .returning({ id: clearinghousePayers.id });
+
+  if (updated.length === 0) {
+    throw new ClearinghouseError(404, "Payer not found for this practice");
+  }
+  return policy;
 }
 
 /**

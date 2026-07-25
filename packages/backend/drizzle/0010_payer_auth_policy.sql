@@ -1,0 +1,1 @@
+ALTER TABLE "clearinghouse_payers" ADD COLUMN "auth_policy" jsonb;

@@ -1,6 +1,15 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import * as payerService from "../services/payer.service.js";
 import * as chService from "../services/clearinghouse.service.js";
+import { requireRole } from "../auth/tenant.js";
+
+const authPolicySchema = z.object({
+  unmanagedVisits: z.number().int().min(0).max(99).optional(),
+  authPeriodMonths: z.number().int().min(1).max(24).optional(),
+  maxVisitsPerAuth: z.number().int().min(1).max(999).optional(),
+  notes: z.string().max(500).optional(),
+});
 
 export async function payerRoutes(app: FastifyInstance) {
   // List the payers this practice can reach through its connected clearinghouses.
@@ -23,6 +32,42 @@ export async function payerRoutes(app: FastifyInstance) {
     }
     return reply.send({ data: payer });
   });
+
+  // Set this practice's auth policy for a payer (unmanaged visits, auth
+  // window, visit cap) — drives New Authorization defaults.
+  app.patch(
+    "/payers/:id/policy",
+    { preHandler: requireRole("admin") },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const parsed = authPolicySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "VALIDATION_ERROR",
+          message: "Invalid payer policy",
+          statusCode: 400,
+          details: parsed.error.flatten(),
+        });
+      }
+      try {
+        const data = await chService.setPayerAuthPolicy(
+          req.auth.practiceId,
+          id,
+          parsed.data
+        );
+        return reply.send({ data });
+      } catch (err) {
+        if (err instanceof chService.ClearinghouseError) {
+          return reply.status(err.statusCode).send({
+            error: "CLEARINGHOUSE_ERROR",
+            message: err.message,
+            statusCode: err.statusCode,
+          });
+        }
+        throw err;
+      }
+    }
+  );
 
   // Get payer rules for a specific CPT code
   app.get("/payers/:id/rules", async (req, reply) => {

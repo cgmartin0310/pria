@@ -11,8 +11,8 @@ import {
   LEVEL_OF_SERVICE_CODES,
   DISCIPLINE_TO_SERVICE_TYPE,
 } from "@pria/shared";
-import { patientsApi, providersApi, authorizationsApi } from "@/lib/api.js";
-import type { Patient, Provider } from "@pria/shared";
+import { patientsApi, providersApi, payersApi, authorizationsApi } from "@/lib/api.js";
+import type { Patient, Payer, Provider } from "@pria/shared";
 
 // PatientWithPayer includes payer object from backend join
 type PatientRow = Patient & { payer?: { id: string; name: string } };
@@ -93,11 +93,14 @@ export default function NewAuthorization() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  const [practicePayers, setPracticePayers] = useState<Payer[]>([]);
+
   useEffect(() => {
-    Promise.all([patientsApi.list(), providersApi.list()])
-      .then(([pRes, provRes]) => {
+    Promise.all([patientsApi.list(), providersApi.list(), payersApi.list()])
+      .then(([pRes, provRes, payRes]) => {
         if (pRes.data) setPatients(pRes.data as PatientRow[]);
         if (provRes.data) setProviders(provRes.data);
+        if (payRes.data) setPracticePayers(payRes.data);
       })
       .catch(() => {
         // proceed with empty lists
@@ -107,6 +110,30 @@ export default function NewAuthorization() {
 
   const patient = patients.find((p) => p.id === selectedPatientId);
   const provider = providers.find((p) => p.id === selectedProviderId);
+
+  const patientPayer = practicePayers.find(
+    (pp) => pp.id === (patient?.payerId ?? patient?.payer?.id)
+  );
+  const payerPolicy = patientPayer?.authPolicy ?? null;
+
+  // Apply the payer's auth policy as defaults when a patient is picked:
+  // visit count from the payer's cap, end date from its auth window.
+  useEffect(() => {
+    if (!payerPolicy) return;
+    if (payerPolicy.maxVisitsPerAuth) {
+      setRequestedVisits(String(payerPolicy.maxVisitsPerAuth));
+    }
+    if (payerPolicy.authPeriodMonths) {
+      const start = startDate || new Date().toISOString().slice(0, 10);
+      if (!startDate) setStartDate(start);
+      const d = new Date(`${start}T00:00:00`);
+      d.setMonth(d.getMonth() + payerPolicy.authPeriodMonths);
+      d.setDate(d.getDate() - 1);
+      setEndDate(d.toISOString().slice(0, 10));
+    }
+    // Re-run only when the selected patient (→ payer) changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPatientId, patientPayer?.id]);
 
   // Auto-derive service type from provider discipline
   const serviceTypeCode = provider
@@ -310,6 +337,22 @@ export default function NewAuthorization() {
               <h3 className="font-medium text-slate-900">Authorization Details</h3>
             </CardHeader>
             <CardContent className="space-y-4">
+              {payerPolicy && (
+                <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                  <span className="font-medium">{patientPayer?.name} policy:</span>{" "}
+                  {[
+                    payerPolicy.unmanagedVisits != null &&
+                      `${payerPolicy.unmanagedVisits} unmanaged visit${payerPolicy.unmanagedVisits === 1 ? "" : "s"} before auth`,
+                    payerPolicy.authPeriodMonths != null &&
+                      `auths run ${payerPolicy.authPeriodMonths} months`,
+                    payerPolicy.maxVisitsPerAuth != null &&
+                      `up to ${payerPolicy.maxVisitsPerAuth} visits per auth`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  {payerPolicy.notes ? ` — ${payerPolicy.notes}` : ""}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Certification Type">
                   <NativeSelect

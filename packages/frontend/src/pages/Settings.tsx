@@ -12,6 +12,7 @@ import {
 import { practiceApi } from "@/lib/api.js";
 import { ClearinghouseSettings } from "@/components/settings/ClearinghouseSettings.js";
 import { PortalSettings } from "@/components/settings/PortalSettings.js";
+import { PayerRulesSettings } from "@/components/settings/PayerRulesSettings.js";
 import type { Practice, ClinicConfig } from "@pria/shared";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -608,6 +609,7 @@ export default function Settings() {
             <TabsList>
               <TabsTrigger value="practice">Practice Info</TabsTrigger>
               <TabsTrigger value="clearinghouses">Clearinghouses</TabsTrigger>
+              <TabsTrigger value="payers">Payer Rules</TabsTrigger>
               <TabsTrigger value="portals">Portals</TabsTrigger>
               <TabsTrigger value="edi">EDI / Billing Config</TabsTrigger>
             </TabsList>
@@ -618,6 +620,10 @@ export default function Settings() {
 
             <TabsContent value="clearinghouses" className="mt-4">
               <ClearinghouseSettings />
+            </TabsContent>
+
+            <TabsContent value="payers" className="mt-4">
+              <PayerRulesSettings />
             </TabsContent>
 
             <TabsContent value="portals" className="mt-4">

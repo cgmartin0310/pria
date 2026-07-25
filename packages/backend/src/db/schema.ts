@@ -604,6 +604,20 @@ export const clearinghousePayers = pgTable(
     supports278: boolean("supports_278").notNull().default(true),
     /** Raw capability flags from the clearinghouse payer list (claims/era/etc). */
     capabilities: jsonb("capabilities").$type<Record<string, string>>(),
+    /**
+     * Practice-entered auth policy for this payer: how many visits are allowed
+     * before an auth is required, how long an auth runs, and its visit cap.
+     * Practice-scoped (like the link itself) because plans vary by state/LOB.
+     */
+    authPolicy: jsonb("auth_policy").$type<{
+      /** Visits allowed before an auth is needed (0 = auth before first treatment). */
+      unmanagedVisits?: number;
+      /** Typical auth window in months (e.g. Healthy Blue: 6). */
+      authPeriodMonths?: number;
+      /** Max visits granted per auth. */
+      maxVisitsPerAuth?: number;
+      notes?: string;
+    }>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
