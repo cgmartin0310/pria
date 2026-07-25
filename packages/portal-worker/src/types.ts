@@ -19,6 +19,8 @@ export interface PortalSubmissionPayload {
     dob: string;
     memberId: string;
     gender?: string;
+    /** X12 relationship code: 18=Self, 01=Spouse, 19=Child, G8=Other. */
+    relationshipCode?: string;
   };
   provider: { firstName?: string; lastName: string; npi: string; taxonomyCode?: string };
   practice: { name: string; npi: string; phone?: string };

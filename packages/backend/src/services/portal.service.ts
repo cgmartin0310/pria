@@ -164,6 +164,7 @@ function buildPayload(auth: {
       dob: auth.patient.dob,
       memberId: auth.patient.memberId,
       gender: auth.patient.gender ?? undefined,
+      relationshipCode: auth.patient.relationshipToSubscriber,
     },
     provider: {
       firstName: auth.provider?.firstName,
