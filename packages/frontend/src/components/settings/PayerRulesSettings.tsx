@@ -18,6 +18,7 @@ function PayerRow({ payer, isAdmin }: { payer: Payer; isAdmin: boolean }) {
   const [maxVisits, setMaxVisits] = useState(
     payer.authPolicy?.maxVisitsPerAuth?.toString() ?? ""
   );
+  const [displayName, setDisplayName] = useState(payer.authPolicy?.displayName ?? "");
   const [portalName, setPortalName] = useState(payer.authPolicy?.portalPayerName ?? "");
   const [portalKey, setPortalKey] = useState(payer.authPolicy?.portalKey ?? "");
   const [notes, setNotes] = useState(payer.authPolicy?.notes ?? "");
@@ -31,6 +32,7 @@ function PayerRow({ payer, isAdmin }: { payer: Payer; isAdmin: boolean }) {
     setSaved(false);
     try {
       const policy: PayerAuthPolicy = {};
+      if (displayName.trim()) policy.displayName = displayName.trim();
       if (unmanaged.trim() !== "") policy.unmanagedVisits = parseInt(unmanaged, 10);
       if (months.trim() !== "") policy.authPeriodMonths = parseInt(months, 10);
       if (maxVisits.trim() !== "") policy.maxVisitsPerAuth = parseInt(maxVisits, 10);
@@ -99,6 +101,17 @@ function PayerRow({ payer, isAdmin }: { payer: Payer; isAdmin: boolean }) {
             disabled={!isAdmin}
           />
         </div>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500">
+          Display name (what your team calls this payer — shown everywhere in Pria)
+        </label>
+        <Input
+          placeholder="e.g. Carolina Complete"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          disabled={!isAdmin}
+        />
       </div>
       <div>
         <label className="text-xs text-slate-500">Auth portal</label>

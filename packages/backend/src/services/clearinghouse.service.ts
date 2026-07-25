@@ -682,15 +682,52 @@ export async function listPracticePayers(practiceId: string) {
     )
     .orderBy(payers.name);
 
-  // De-dupe by payer id (a payer could be reachable via >1 connected network).
+  // De-dupe by payer id (a payer could be reachable via >1 connected network),
+  // and show the practice's display name where one is set (directory "CENTENE"
+  // → "Carolina Complete"); directoryName keeps the original for EDI contexts.
   const seen = new Set<string>();
-  const result: typeof rows = [];
+  const result: (typeof rows[number] & { directoryName: string })[] = [];
   for (const r of rows) {
     if (seen.has(r.id)) continue;
     seen.add(r.id);
-    result.push(r);
+    result.push({
+      ...r,
+      directoryName: r.name,
+      name: r.authPolicy?.displayName || r.name,
+    });
   }
   return result;
+}
+
+/**
+ * payer row id → the practice's display name, for rewriting payer names in
+ * practice-facing responses (patients, authorizations).
+ */
+export async function getPayerDisplayNames(
+  practiceId: string
+): Promise<Record<string, string>> {
+  const rows = await db
+    .select({
+      payerId: clearinghousePayers.payerId,
+      authPolicy: clearinghousePayers.authPolicy,
+    })
+    .from(clearinghousePayers)
+    .where(eq(clearinghousePayers.practiceId, practiceId));
+  const map: Record<string, string> = {};
+  for (const r of rows) {
+    if (r.authPolicy?.displayName) map[r.payerId] = r.authPolicy.displayName;
+  }
+  return map;
+}
+
+/** Rewrite a joined payer's name to the practice's display name, if set. */
+export function applyPayerDisplayName<T extends { id: string; name: string }>(
+  payer: T | null | undefined,
+  names: Record<string, string>
+): T | null | undefined {
+  if (!payer) return payer;
+  const display = names[payer.id];
+  return display ? { ...payer, name: display } : payer;
 }
 
 /**

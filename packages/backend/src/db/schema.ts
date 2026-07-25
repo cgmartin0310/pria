@@ -610,6 +610,12 @@ export const clearinghousePayers = pgTable(
      * Practice-scoped (like the link itself) because plans vary by state/LOB.
      */
     authPolicy: jsonb("auth_policy").$type<{
+      /**
+       * How this practice knows the payer — shown throughout the UI in place
+       * of the directory name (directory "CENTENE" → "Carolina Complete").
+       * EDI ids and portal selection are unaffected.
+       */
+      displayName?: string;
       /** Visits allowed before an auth is needed (0 = auth before first treatment). */
       unmanagedVisits?: number;
       /** Typical auth window in months (e.g. Healthy Blue: 6). */

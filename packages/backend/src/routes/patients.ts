@@ -2,6 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, and, like, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
+import {
+  getPayerDisplayNames,
+  applyPayerDisplayName,
+} from "../services/clearinghouse.service.js";
 
 const addressSchema = z.object({
   street: z.string().min(1),
@@ -60,7 +64,7 @@ export async function patientRoutes(app: FastifyInstance) {
     const conditions = [eq(schema.patients.practiceId, req.auth.practiceId)];
     if (payerId) conditions.push(eq(schema.patients.payerId, payerId));
 
-    const [items, countResult] = await Promise.all([
+    const [items, countResult, payerNames] = await Promise.all([
       db.query.patients.findMany({
         where: and(...conditions),
         with: { payer: true },
@@ -72,10 +76,14 @@ export async function patientRoutes(app: FastifyInstance) {
         .select({ count: sql<number>`count(*)` })
         .from(schema.patients)
         .where(and(...conditions)),
+      getPayerDisplayNames(req.auth.practiceId),
     ]);
 
     return reply.send({
-      data: items,
+      data: items.map((p) => ({
+        ...p,
+        payer: applyPayerDisplayName(p.payer, payerNames),
+      })),
       total: Number(countResult[0]?.count ?? 0),
       page,
       pageSize,
@@ -107,7 +115,10 @@ export async function patientRoutes(app: FastifyInstance) {
       });
     }
 
-    return reply.send({ data: patient });
+    const payerNames = await getPayerDisplayNames(req.auth.practiceId);
+    return reply.send({
+      data: { ...patient, payer: applyPayerDisplayName(patient.payer, payerNames) },
+    });
   });
 
   // Create patient

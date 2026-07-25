@@ -3,6 +3,10 @@ import { db, schema } from "../db/index.js";
 import * as ediService from "./edi.service.js";
 import * as aiService from "./ai.service.js";
 import { paSubmitQueue } from "../jobs/queue.js";
+import {
+  getPayerDisplayNames,
+  applyPayerDisplayName,
+} from "./clearinghouse.service.js";
 import type { Authorization, AuthorizationFilters } from "@pria/shared";
 
 const {
@@ -27,7 +31,7 @@ export async function listAuthorizations(
   if (patientId) conditions.push(eq(authorizations.patientId, patientId));
   if (payerId) conditions.push(eq(authorizations.payerId, payerId));
 
-  const [items, countResult] = await Promise.all([
+  const [items, countResult, payerNames] = await Promise.all([
     db.query.authorizations.findMany({
       where: and(...conditions),
       with: { patient: true, payer: true },
@@ -39,10 +43,14 @@ export async function listAuthorizations(
       .select({ count: sql<number>`count(*)` })
       .from(authorizations)
       .where(and(...conditions)),
+    getPayerDisplayNames(practiceId),
   ]);
 
   return {
-    data: items,
+    data: items.map((a) => ({
+      ...a,
+      payer: applyPayerDisplayName(a.payer, payerNames),
+    })),
     total: Number(countResult[0]?.count ?? 0),
     page,
     pageSize,
@@ -55,18 +63,32 @@ export async function getAuthorizationById(
   id: string,
   practiceId: string
 ) {
-  return db.query.authorizations.findFirst({
-    where: and(
-      eq(authorizations.id, id),
-      eq(authorizations.practiceId, practiceId)
-    ),
-    with: {
-      patient: { with: { payer: true } },
-      payer: true,
-      documents: true,
-      history: true,
-    },
-  });
+  const [auth, payerNames] = await Promise.all([
+    db.query.authorizations.findFirst({
+      where: and(
+        eq(authorizations.id, id),
+        eq(authorizations.practiceId, practiceId)
+      ),
+      with: {
+        patient: { with: { payer: true } },
+        payer: true,
+        documents: true,
+        history: true,
+      },
+    }),
+    getPayerDisplayNames(practiceId),
+  ]);
+  if (!auth) return auth;
+  return {
+    ...auth,
+    payer: applyPayerDisplayName(auth.payer, payerNames),
+    patient: auth.patient
+      ? {
+          ...auth.patient,
+          payer: applyPayerDisplayName(auth.patient.payer, payerNames),
+        }
+      : auth.patient,
+  };
 }
 
 // ─── Create Authorization ─────────────────────────────────────────────────────

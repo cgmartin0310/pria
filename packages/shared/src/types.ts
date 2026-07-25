@@ -227,6 +227,8 @@ export interface PayerRulesConfig {
  * defaults. Stored on the practice's payer link, not the shared payer row.
  */
 export interface PayerAuthPolicy {
+  /** Practice-facing payer name shown in the UI (directory name stays for EDI). */
+  displayName?: string;
   /** Visits allowed before an auth is required (0 = auth before first treatment). */
   unmanagedVisits?: number;
   /** Typical auth window in months (e.g. Healthy Blue: 6). */

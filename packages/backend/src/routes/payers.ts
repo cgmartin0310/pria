@@ -5,6 +5,7 @@ import * as chService from "../services/clearinghouse.service.js";
 import { requireRole } from "../auth/tenant.js";
 
 const authPolicySchema = z.object({
+  displayName: z.string().max(255).optional(),
   unmanagedVisits: z.number().int().min(0).max(99).optional(),
   authPeriodMonths: z.number().int().min(1).max(24).optional(),
   maxVisitsPerAuth: z.number().int().min(1).max(999).optional(),
