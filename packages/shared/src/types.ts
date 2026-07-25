@@ -233,6 +233,12 @@ export interface PayerAuthPolicy {
   authPeriodMonths?: number;
   /** Max visits granted per auth. */
   maxVisitsPerAuth?: number;
+  /**
+   * Exact payer name as shown in the portal's payer dropdown, when it differs
+   * from the directory name (directory "CENTENE" vs wizard "CAROLINA COMPLETE
+   * HEALTH"). Portal recipes select the payer by this.
+   */
+  portalPayerName?: string;
   notes?: string;
 }
 

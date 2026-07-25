@@ -8,7 +8,7 @@ import type {
   PortalSubmissionPayload,
 } from "./portal-adapter.types.js";
 
-const { portalConnections, portalSubmissions, authorizations } = schema;
+const { portalConnections, portalSubmissions, authorizations, clearinghousePayers } = schema;
 
 export class PortalError extends Error {
   constructor(
@@ -170,12 +170,15 @@ function buildPayload(auth: {
   clinicalNotes: string | null;
   serviceTypeCode: string | null;
   placeOfServiceCode: string | null;
-}): PortalSubmissionPayload {
+}, portalPayerName?: string): PortalSubmissionPayload {
   const diagnoses = Array.from(
     new Set([...(auth.icdCodes ?? []), ...(auth.patient.diagnosisCodes ?? [])])
   );
   return {
-    payerName: auth.payer.name,
+    // Portals list payers under their own display names (Availity's wizard
+    // shows "CAROLINA COMPLETE HEALTH" where the EDI directory says
+    // "CENTENE") — the per-payer override wins when set.
+    payerName: portalPayerName || auth.payer.name,
     payerId: auth.payer.payerId,
     patient: {
       firstName: auth.patient.firstName,
@@ -248,7 +251,15 @@ export async function enqueuePortalSubmission(
   });
   if (!auth) throw new PortalError(404, "Authorization not found");
 
-  const payload = buildPayload(auth);
+  // The practice's payer link may carry a portal-specific display name.
+  const link = await db.query.clearinghousePayers.findFirst({
+    where: and(
+      eq(clearinghousePayers.practiceId, practiceId),
+      eq(clearinghousePayers.payerId, auth.payerId)
+    ),
+  });
+
+  const payload = buildPayload(auth, link?.authPolicy?.portalPayerName);
 
   const [submission] = await db
     .insert(portalSubmissions)

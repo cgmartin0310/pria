@@ -8,6 +8,7 @@ const authPolicySchema = z.object({
   unmanagedVisits: z.number().int().min(0).max(99).optional(),
   authPeriodMonths: z.number().int().min(1).max(24).optional(),
   maxVisitsPerAuth: z.number().int().min(1).max(999).optional(),
+  portalPayerName: z.string().max(255).optional(),
   notes: z.string().max(500).optional(),
 });
 

@@ -616,6 +616,12 @@ export const clearinghousePayers = pgTable(
       authPeriodMonths?: number;
       /** Max visits granted per auth. */
       maxVisitsPerAuth?: number;
+      /**
+       * Exact payer name as it appears in the PORTAL's payer dropdown, when it
+       * differs from the directory name (e.g. directory "CENTENE" vs Availity
+       * wizard "CAROLINA COMPLETE HEALTH"). Portal recipes select by this.
+       */
+      portalPayerName?: string;
       notes?: string;
     }>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),

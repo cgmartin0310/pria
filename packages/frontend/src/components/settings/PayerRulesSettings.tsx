@@ -18,6 +18,7 @@ function PayerRow({ payer, isAdmin }: { payer: Payer; isAdmin: boolean }) {
   const [maxVisits, setMaxVisits] = useState(
     payer.authPolicy?.maxVisitsPerAuth?.toString() ?? ""
   );
+  const [portalName, setPortalName] = useState(payer.authPolicy?.portalPayerName ?? "");
   const [notes, setNotes] = useState(payer.authPolicy?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -32,6 +33,7 @@ function PayerRow({ payer, isAdmin }: { payer: Payer; isAdmin: boolean }) {
       if (unmanaged.trim() !== "") policy.unmanagedVisits = parseInt(unmanaged, 10);
       if (months.trim() !== "") policy.authPeriodMonths = parseInt(months, 10);
       if (maxVisits.trim() !== "") policy.maxVisitsPerAuth = parseInt(maxVisits, 10);
+      if (portalName.trim()) policy.portalPayerName = portalName.trim();
       if (notes.trim()) policy.notes = notes.trim();
       await payersApi.updatePolicy(payer.id, policy);
       setSaved(true);
@@ -95,6 +97,17 @@ function PayerRow({ payer, isAdmin }: { payer: Payer; isAdmin: boolean }) {
             disabled={!isAdmin}
           />
         </div>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500">
+          Name in portal dropdown (if different — copy it exactly from Availity)
+        </label>
+        <Input
+          placeholder={`e.g. CAROLINA COMPLETE HEALTH (directory says "${payer.name}")`}
+          value={portalName}
+          onChange={(e) => setPortalName(e.target.value)}
+          disabled={!isAdmin}
+        />
       </div>
       <Input
         placeholder="Notes (e.g. routes through Carelon; eval doesn't need auth)"
