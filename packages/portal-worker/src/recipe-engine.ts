@@ -109,6 +109,50 @@ async function clickInRow(target: Target, selector: string, text: string): Promi
   );
 }
 
+/**
+ * Select an option by exact value, then exact label, then normalized
+ * contains-match on the label (case/punctuation-insensitive). Portal selects
+ * use private option values Pria can't know ("602" for Healthy Blue), and
+ * labels drift on punctuation ("Kidology Inc" vs "Kidology, Inc") — the
+ * chain lets recipes bind human-known names. force: Select2-style widgets
+ * hide the real <select>; the change event still updates their UI.
+ */
+async function selectWithFallback(target: Target, selector: string, value: string): Promise<void> {
+  if (!value) throw new Error("select: value resolved to empty");
+  try {
+    await target.selectOption(selector, value, { force: true });
+    return;
+  } catch {
+    /* fall through to label matching */
+  }
+  try {
+    await target.selectOption(selector, { label: value }, { force: true });
+    return;
+  } catch {
+    /* fall through to normalized matching */
+  }
+  const el = await target.$(selector);
+  if (!el) throw new Error(`select: no element matches ${selector}`);
+  const matched = await el.evaluate((node, wanted) => {
+    const sel = node as HTMLSelectElement;
+    const norm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const w = norm(wanted);
+    if (!w) return false;
+    for (const opt of Array.from(sel.options)) {
+      const o = norm(opt.text);
+      if (o && (o.includes(w) || w.includes(o))) {
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      }
+    }
+    return false;
+  }, value);
+  if (!matched) {
+    throw new Error(`select: no option matching "${value}" in ${selector}`);
+  }
+}
+
 /** Best-effort JPEG snapshot so a paused submission shows WHAT the page looked like. */
 export async function snap(page: Page): Promise<string | undefined> {
   try {
@@ -224,11 +268,7 @@ async function execSteps(
           await page.keyboard.press(step.key);
           break;
         case "select":
-          // force: Select2-style widgets hide the real <select>; selectOption
-          // still fires the change event those widgets listen for.
-          await state.target.selectOption(fixSelector(sub(step.selector)), valueFor(step), {
-            force: true,
-          });
+          await selectWithFallback(state.target, fixSelector(sub(step.selector)), valueFor(step));
           break;
         case "check":
           await state.target.check(fixSelector(sub(step.selector)));
