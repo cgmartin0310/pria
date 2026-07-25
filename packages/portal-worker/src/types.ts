@@ -32,6 +32,8 @@ export interface PortalSubmissionPayload {
     fax?: string;
     address?: { street: string; city: string; state: string; zip: string };
   };
+  serviceType?: { code?: string; label?: string };
+  placeOfService?: { code?: string; label?: string };
   diagnoses: string[];
   cptCodes: string[];
   requestedVisits?: number;

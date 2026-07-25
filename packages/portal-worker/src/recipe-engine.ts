@@ -205,7 +205,11 @@ export async function runRecipe(
           await page.keyboard.press(step.key);
           break;
         case "select":
-          await target.selectOption(fixSelector(step.selector), valueFor(step, payload));
+          // force: Select2-style widgets hide the real <select>; selectOption
+          // still fires the change event those widgets listen for.
+          await target.selectOption(fixSelector(step.selector), valueFor(step, payload), {
+            force: true,
+          });
           break;
         case "check":
           await target.check(fixSelector(step.selector));

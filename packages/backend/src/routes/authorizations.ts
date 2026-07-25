@@ -18,6 +18,8 @@ const createAuthSchema = z.object({
   certificationTypeCode: z.string().max(2).optional(),
   serviceTypeCode: z.string().max(5).optional(),
   levelOfServiceCode: z.string().max(2).optional(),
+  /** CMS POS code — therapy practices use 11 (Office) or 12 (Home). */
+  placeOfServiceCode: z.string().max(5).optional(),
   visitPattern: z
     .object({
       visitsPerPeriod: z.number().int().min(1),

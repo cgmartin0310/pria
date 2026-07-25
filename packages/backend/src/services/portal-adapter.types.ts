@@ -62,6 +62,14 @@ export interface PortalSubmissionPayload {
      */
     address?: { street: string; city: string; state: string; zip: string };
   };
+  /**
+   * Service discipline for portal dropdowns. `code` is the PORTAL's code
+   * (Availity: PT/AD/AF — note PT, not X12's AE, for physical therapy);
+   * `label` is the display text ("Physical Therapy") for text-driven selects.
+   */
+  serviceType?: { code?: string; label?: string };
+  /** CMS POS — 11 "Office" or 12 "Home" for therapy practices. */
+  placeOfService?: { code?: string; label?: string };
   diagnoses: string[];
   cptCodes: string[];
   requestedVisits?: number;

@@ -140,6 +140,23 @@ export async function getDecryptedCredentials(
 
 // ─── Submissions ────────────────────────────────────────────────────────────────
 
+/**
+ * Availity's Service Type dropdown codes for therapy: PT / AD / AF. Note the
+ * portal uses "PT" where X12 uses "AE" for physical therapy — Pria stores the
+ * X12 code and translates here, at the portal boundary.
+ */
+const PORTAL_SERVICE_TYPES: Record<string, { code: string; label: string }> = {
+  AE: { code: "PT", label: "Physical Therapy" },
+  PT: { code: "PT", label: "Physical Therapy" },
+  AD: { code: "AD", label: "Occupational Therapy" },
+  AF: { code: "AF", label: "Speech Therapy" },
+};
+
+const PLACE_OF_SERVICE_LABELS: Record<string, string> = {
+  "11": "Office",
+  "12": "Home",
+};
+
 function buildPayload(auth: {
   patient: typeof schema.patients.$inferSelect;
   payer: typeof schema.payers.$inferSelect;
@@ -151,6 +168,8 @@ function buildPayload(auth: {
   startDate: string | null;
   endDate: string | null;
   clinicalNotes: string | null;
+  serviceTypeCode: string | null;
+  placeOfServiceCode: string | null;
 }): PortalSubmissionPayload {
   const diagnoses = Array.from(
     new Set([...(auth.icdCodes ?? []), ...(auth.patient.diagnosisCodes ?? [])])
@@ -184,6 +203,15 @@ function buildPayload(auth: {
       lastName: auth.patient.referringProviderLastName ?? undefined,
       npi: auth.patient.referringProviderNpi ?? undefined,
     },
+    serviceType: auth.serviceTypeCode
+      ? (PORTAL_SERVICE_TYPES[auth.serviceTypeCode] ?? { code: auth.serviceTypeCode })
+      : undefined,
+    placeOfService: auth.placeOfServiceCode
+      ? {
+          code: auth.placeOfServiceCode,
+          label: PLACE_OF_SERVICE_LABELS[auth.placeOfServiceCode],
+        }
+      : undefined,
     diagnoses,
     cptCodes: auth.cptCodes ?? [],
     requestedVisits: auth.requestedVisits,

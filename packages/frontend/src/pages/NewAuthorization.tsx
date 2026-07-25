@@ -74,6 +74,7 @@ export default function NewAuthorization() {
   const [selectedProviderId, setSelectedProviderId] = useState("");
   const [certificationTypeCode, setCertificationTypeCode] = useState("I");
   const [levelOfServiceCode, setLevelOfServiceCode] = useState("R");
+  const [placeOfServiceCode, setPlaceOfServiceCode] = useState("11");
   const [selectedCpts, setSelectedCpts] = useState<string[]>([]);
   const [icdCodes] = useState<string[]>([]);
   const [requestedVisits, setRequestedVisits] = useState("12");
@@ -146,6 +147,7 @@ export default function NewAuthorization() {
     certificationTypeCode,
     serviceTypeCode,
     levelOfServiceCode,
+    placeOfServiceCode,
     cptCodes: selectedCpts,
     icdCodes: patient?.diagnosisCodes ?? icdCodes,
     requestedVisits: parseInt(requestedVisits, 10),
@@ -335,6 +337,18 @@ export default function NewAuthorization() {
                     )}
                   </NativeSelect>
                 </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Place of Service">
+                  <NativeSelect
+                    value={placeOfServiceCode}
+                    onChange={setPlaceOfServiceCode}
+                  >
+                    <option value="11">11 — Office</option>
+                    <option value="12">12 — Home</option>
+                  </NativeSelect>
+                </Field>
+                <div />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Start Date">

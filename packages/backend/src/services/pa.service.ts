@@ -86,6 +86,7 @@ export async function createAuthorization(
     certificationTypeCode?: string;
     serviceTypeCode?: string;
     levelOfServiceCode?: string;
+    placeOfServiceCode?: string;
     visitPattern?: {
       visitsPerPeriod: number;
       periodFrequency: "DA" | "WK" | "MO";
@@ -137,6 +138,7 @@ export async function createAuthorization(
       certificationTypeCode: data.certificationTypeCode ?? null,
       serviceTypeCode: data.serviceTypeCode ?? null,
       levelOfServiceCode: data.levelOfServiceCode ?? null,
+      placeOfServiceCode: data.placeOfServiceCode ?? null,
       visitPattern: data.visitPattern ?? null,
       startDate: data.startDate ?? null,
       endDate: data.endDate ?? null,
