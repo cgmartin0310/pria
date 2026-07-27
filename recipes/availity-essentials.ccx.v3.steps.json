@@ -524,9 +524,15 @@
   "selector": "#authWizardNextButton"
  },
  {
+  "action": "clickIfPresent",
+  "selector": "#nextStepsButton",
+  "timeoutMs": 15000,
+  "note": "Evaluation summary can appear after the provider step on this flow"
+ },
+ {
   "action": "waitFor",
   "selector": "button:has-text(\"Add File\")",
-  "timeoutMs": 30000,
+  "timeoutMs": 40000,
   "note": "CCH Step 4: Attachments — skippable"
  },
  {
