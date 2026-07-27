@@ -158,6 +158,22 @@ Rendering provider (= treating therapist, Type 1):
   confirmationNumber) — **TODO: snippet the confirmation page on the first
   manual filing.**
 
+## CCH InterQual + Attachments (captured 2026-07-27)
+
+- After the rendering step: InterQual Review interstitial — **OPTIONAL**
+  ("Take me to InterQual" vs "Skip"; skipping proceeds to submission but
+  the payer reviews medical necessity manually). Completing it can speed
+  or auto-approve. Biller policy decision per payer.
+- ⚠ Date display on the InterQual summary showed service dates ONE DAY
+  EARLIER than typed (07/27→07/26) — likely a TZ parse; verify on the
+  review page before trusting typed dates.
+- Attachments (CCH): **REQUIRED** (red "An attachment is required").
+  Upload via `input#filePicker-1` (type=file, accept
+  .pdf,.jpg,.jpeg,.gif,.png,.doc,.docm,.docx,.tif,.tiff,.txt) + "Add
+  File" button. Worker automation needs Pria document storage + an
+  uploadFile engine step (setInputFiles) — currently the blocker for
+  fully-automated CCH filings.
+
 ## Manual provider entry (captured from a CCH draft, 2026-07-27)
 
 "Enter Manually" on a provider section exposes
