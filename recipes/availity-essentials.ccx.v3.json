@@ -1,6 +1,6 @@
 {
   "portalKey": "availity_essentials",
-  "name": "Availity Essentials outpatient therapy auth v7 (Carolina Complete flow)",
+  "name": "Availity Essentials outpatient therapy auth v8 (Carolina Complete flow)",
   "activate": true,
   "steps": [
     { "action": "clickByText", "text": "Patient Registration", "note": "Top nav (main document)" },
@@ -115,9 +115,9 @@
     { "action": "clickIfPresent", "selector": "#nextStepsButton", "timeoutMs": 15000, "note": "Evaluation summary interstitial, if this payer shows one" },
 
     { "action": "waitFor", "selector": "#search.renderingProviders.serviceProvider.0.npi", "timeoutMs": 40000, "note": "CCH Step 3: Rendering = treating therapist" },
-    { "action": "type", "selector": "#search.renderingProviders.serviceProvider.0.npi", "binding": "provider.npi" },
+    { "action": "type", "selector": "#search.renderingProviders.serviceProvider.0.npi", "binding": "practice.npi", "note": "CCH's search only resolves payer-enrolled entities — the group, not individual therapists (verified live twice)" },
     { "action": "click", "selector": "input[value=\"Retrieve Provider Info\"]:visible" },
-    { "action": "clickIfPresent", "selector": "[id=\"selectProvider0\"]:visible", "timeoutMs": 8000, "note": "Individual NPI usually returns one row" },
+    { "action": "clickInRow", "selector": "input[id^=\"selectProvider\"]:visible", "binding": "practice.address.street", "note": "Same street-row pick as requesting" },
     { "action": "typeIfPresent", "selector": "#renderingProviders.serviceProvider.0.contactName", "binding": "practice.contactName", "timeoutMs": 6000 },
     { "action": "typeIfPresent", "selector": "#renderingProviders.serviceProvider.0.phone", "binding": "practice.phone", "transform": "digits", "timeoutMs": 4000 },
     { "action": "typeIfPresent", "selector": "#renderingProviders.serviceProvider.0.fax", "binding": "practice.fax", "transform": "digits", "timeoutMs": 4000 },
