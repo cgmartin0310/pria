@@ -1,130 +1,572 @@
 {
-  "portalKey": "availity_essentials",
-  "name": "Availity Essentials outpatient therapy auth v10 (Carolina Complete flow)",
-  "activate": true,
-  "steps": [
-    { "action": "clickByText", "text": "Patient Registration", "note": "Top nav (main document)" },
-    { "action": "clickByText", "text": "Authorizations & Referrals" },
-    { "action": "useFrame", "urlIncludes": "onboarding-ui-apps", "timeoutMs": 20000, "note": "A&R apps render inside this iframe" },
-    { "action": "waitFor", "selector": "#NAVIGATION-authorizations", "timeoutMs": 20000 },
-    { "action": "click", "selector": "#NAVIGATION-authorizations" },
-    { "action": "clickByText", "text": "New Request" },
-
-    { "action": "waitFor", "selector": "#authWizardNextButton", "timeoutMs": 20000, "note": "Payer page" },
-    { "action": "select", "selector": "#organization", "binding": "practice.name" },
-    { "action": "select", "selector": "#requestType", "value": "HS", "note": "Outpatient Authorization" },
-    { "action": "select", "selector": "#payer", "binding": "payerName", "note": "By label; portalPayerName override wins" },
-    { "action": "click", "selector": "#authWizardNextButton" },
-
-    { "action": "waitFor", "selector": "#patient.firstName", "timeoutMs": 30000, "note": "CCH Step 1: patient + requesting provider on ONE screen" },
-    { "action": "typeIfPresent", "selector": "#subscriber.memberId", "binding": "patient.memberId", "timeoutMs": 4000 },
-    { "action": "typeIfPresent", "selector": "#patient.firstName", "binding": "patient.firstName", "timeoutMs": 4000 },
-    { "action": "typeIfPresent", "selector": "#patient.lastName", "binding": "patient.lastName", "timeoutMs": 4000 },
-    { "action": "click", "selector": "#patient.birthDate" },
-    { "action": "press", "key": "Control+a" },
-    { "action": "typeActive", "binding": "patient.dob", "transform": "dateMMDDYYYY", "note": "Masked date" },
-    { "action": "select", "selector": "#genderCode", "binding": "patient.gender", "note": "Skips when payload empty" },
-    { "action": "select", "selector": "#patient.subscriberRelationshipCode", "binding": "patient.relationshipCode", "note": "CCH offers 18 Self only" },
-
-    { "action": "type", "selector": "#search.requestingProvider.npi", "binding": "practice.npi", "note": "CCH requesting = the org: search resolves only payer-enrolled providers (PCPs aren't in the file)" },
-    { "action": "click", "selector": "input[value=\"Retrieve Provider Info\"]:visible" },
-    { "action": "clickInRow", "selector": "input[id^=\"selectProvider\"]:visible", "binding": "practice.address.street", "note": "Pick the practice location by street" },
-    { "action": "typeIfPresent", "selector": "#requestingProvider.contactName", "binding": "practice.contactName", "timeoutMs": 6000, "note": "Auto-filled for interactive sessions, blank for the worker" },
-    { "action": "click", "selector": "#requestingProvider.phone" },
-    { "action": "wait", "ms": 700, "note": "Let the input mask initialize — a cold mask eats the first keystrokes" },
-    { "action": "press", "key": "Control+a" },
-    { "action": "press", "key": "Delete" },
-    { "action": "typeActive", "binding": "practice.phone", "transform": "digits" },
-    { "action": "press", "key": "Control+a" },
-    { "action": "press", "key": "Delete" },
-    { "action": "typeActive", "binding": "practice.phone", "transform": "digits", "note": "Second pass into the warmed mask — idempotent, fixes any eaten digits" },
-    { "action": "click", "selector": "#requestingProvider.fax" },
-    { "action": "press", "key": "Control+a" },
-    { "action": "press", "key": "Delete" },
-    { "action": "typeActive", "binding": "practice.fax", "transform": "digits", "note": "Decision letters fax here" },
-    { "action": "click", "selector": "#authWizardNextButton", "note": "Fires eligibility + validation" },
-
-    { "action": "waitFor", "selector": "#fromDate", "timeoutMs": 40000, "note": "CCH Step 2: Add Service Information" },
-    { "action": "select", "selector": "#serviceTypeCode", "binding": "serviceType.code", "note": "PT/AD/AF portal codes" },
-    { "action": "select", "selector": "#placeOfServiceCode", "binding": "placeOfService.code" },
-    { "action": "click", "selector": "#fromDate" },
-    { "action": "wait", "ms": 700, "note": "First masked field on this page — same cold-mask guard" },
-    { "action": "press", "key": "Control+a" },
-    { "action": "press", "key": "Delete" },
-    { "action": "typeActive", "binding": "startDate", "transform": "dateMMDDYYYY" },
-    { "action": "press", "key": "Control+a" },
-    { "action": "press", "key": "Delete" },
-    { "action": "typeActive", "binding": "startDate", "transform": "dateMMDDYYYY" },
-    { "action": "click", "selector": "#toDate" },
-    { "action": "press", "key": "Control+a" },
-    { "action": "typeActive", "binding": "endDate", "transform": "dateMMDDYYYY" },
-    { "action": "press", "key": "Escape", "note": "Close the lingering date-picker popup" },
-    { "action": "select", "selector": "#serviceLevelCode", "binding": "serviceLevelCode", "note": "E Elective / U Urgent" },
-
-    { "action": "click", "selector": "[id=\"s2id_diagnoses.0.code\"]", "note": "Ajax ICD search" },
-    { "action": "typeActive", "binding": "diagnoses.0" },
-    { "action": "wait", "ms": 1500 },
-    { "action": "press", "key": "Enter" },
-    { "action": "forEach", "list": "diagnoses", "startIndex": 1, "steps": [
-      { "action": "clickByText", "text": "Add another diagnosis code" },
-      { "action": "click", "selector": "[id=\"s2id_diagnoses.{i}.code\"]" },
-      { "action": "typeActive", "binding": "diagnoses.{i}" },
-      { "action": "wait", "ms": 1500 },
-      { "action": "press", "key": "Enter" }
-    ] },
-
-    { "action": "click", "selector": "[id=\"s2id_procedures.0.code\"]", "note": "Ajax CPT search" },
-    { "action": "typeActive", "binding": "procedures.0.code" },
-    { "action": "wait", "ms": 1500 },
-    { "action": "press", "key": "Enter" },
-    { "action": "select", "selector": "#procedures.0.qualifierCode", "value": "HC" },
-    { "action": "type", "selector": "#procedures.0.serviceQuantity", "binding": "procedures.0.units" },
-    { "action": "select", "selector": "#procedures.0.serviceQuantityTypeCode", "value": "FL", "note": "Units" },
-    { "action": "click", "selector": "#procedures.0.fromDate", "note": "CCH wants a date range PER procedure" },
-    { "action": "press", "key": "Control+a" },
-    { "action": "press", "key": "Delete" },
-    { "action": "typeActive", "binding": "startDate", "transform": "dateMMDDYYYY" },
-    { "action": "click", "selector": "#procedures.0.toDate" },
-    { "action": "press", "key": "Control+a" },
-    { "action": "press", "key": "Delete" },
-    { "action": "typeActive", "binding": "endDate", "transform": "dateMMDDYYYY" },
-    { "action": "press", "key": "Escape", "note": "Close the date picker" },
-    { "action": "forEach", "list": "procedures", "startIndex": 1, "steps": [
-      { "action": "clickByText", "text": "Add another procedure code" },
-      { "action": "click", "selector": "[id=\"s2id_procedures.{i}.code\"]" },
-      { "action": "typeActive", "binding": "procedures.{i}.code" },
-      { "action": "wait", "ms": 1500 },
-      { "action": "press", "key": "Enter" },
-      { "action": "select", "selector": "#procedures.{i}.qualifierCode", "value": "HC" },
-      { "action": "type", "selector": "#procedures.{i}.serviceQuantity", "binding": "procedures.{i}.units" },
-      { "action": "select", "selector": "#procedures.{i}.serviceQuantityTypeCode", "value": "FL" },
-      { "action": "click", "selector": "#procedures.{i}.fromDate" },
-      { "action": "press", "key": "Control+a" },
-      { "action": "press", "key": "Delete" },
-      { "action": "typeActive", "binding": "startDate", "transform": "dateMMDDYYYY" },
-      { "action": "click", "selector": "#procedures.{i}.toDate" },
-      { "action": "press", "key": "Control+a" },
-      { "action": "press", "key": "Delete" },
-      { "action": "typeActive", "binding": "endDate", "transform": "dateMMDDYYYY" },
-      { "action": "press", "key": "Escape" }
-    ] },
-
-    { "action": "typeIfPresent", "selector": "#providerNotes.0.message", "binding": "clinicalNotes", "timeoutMs": 4000, "note": "Small char cap — keep notes short" },
-    { "action": "click", "selector": "#authWizardNextButton", "note": "May fire a real-time payer evaluation" },
-
-    { "action": "clickIfPresent", "selector": "#nextStepsButton", "timeoutMs": 15000, "note": "Evaluation summary interstitial, if this payer shows one" },
-
-    { "action": "waitFor", "selector": "#search.renderingProviders.serviceProvider.0.npi", "timeoutMs": 40000, "note": "CCH Step 3: Rendering = treating therapist" },
-    { "action": "type", "selector": "#search.renderingProviders.serviceProvider.0.npi", "binding": "practice.npi", "note": "CCH's search only resolves payer-enrolled entities — the group, not individual therapists (verified live twice)" },
-    { "action": "click", "selector": "input[value=\"Retrieve Provider Info\"]:visible" },
-    { "action": "clickInRow", "selector": "input[id^=\"selectProvider\"]:visible", "binding": "practice.address.street", "note": "Same street-row pick as requesting" },
-    { "action": "typeIfPresent", "selector": "#renderingProviders.serviceProvider.0.contactName", "binding": "practice.contactName", "timeoutMs": 6000 },
-    { "action": "typeIfPresent", "selector": "#renderingProviders.serviceProvider.0.phone", "binding": "practice.phone", "transform": "digits", "timeoutMs": 4000 },
-    { "action": "typeIfPresent", "selector": "#renderingProviders.serviceProvider.0.fax", "binding": "practice.fax", "transform": "digits", "timeoutMs": 4000 },
-    { "action": "click", "selector": "#authWizardNextButton" },
-
-    { "action": "clickIfPresent", "selector": "#nextStepsButton", "timeoutMs": 15000, "note": "Evaluation summary can appear after the provider step on this flow" },
-    { "action": "wait", "ms": 3000 },
-    { "action": "pauseForHuman", "reason": "All auth data entered — Carolina Complete now requires its InterQual medical-necessity review, which needs clinical answers from a human. Open the in-progress request in Availity, complete the InterQual questions, attachments if any, review, and Submit. Clinical questionnaires stay human by design." }
-  ]
+ "portalKey": "availity_essentials",
+ "name": "Availity Essentials outpatient therapy auth v11 (Carolina Complete flow)",
+ "activate": true,
+ "steps": [
+  {
+   "action": "clickByText",
+   "text": "Patient Registration",
+   "note": "Top nav (main document)"
+  },
+  {
+   "action": "clickByText",
+   "text": "Authorizations & Referrals"
+  },
+  {
+   "action": "useFrame",
+   "urlIncludes": "onboarding-ui-apps",
+   "timeoutMs": 20000,
+   "note": "A&R apps render inside this iframe"
+  },
+  {
+   "action": "waitFor",
+   "selector": "#NAVIGATION-authorizations",
+   "timeoutMs": 20000
+  },
+  {
+   "action": "click",
+   "selector": "#NAVIGATION-authorizations"
+  },
+  {
+   "action": "clickByText",
+   "text": "New Request"
+  },
+  {
+   "action": "waitFor",
+   "selector": "#authWizardNextButton",
+   "timeoutMs": 20000,
+   "note": "Payer page"
+  },
+  {
+   "action": "select",
+   "selector": "#organization",
+   "binding": "practice.name"
+  },
+  {
+   "action": "select",
+   "selector": "#requestType",
+   "value": "HS",
+   "note": "Outpatient Authorization"
+  },
+  {
+   "action": "select",
+   "selector": "#payer",
+   "binding": "payerName",
+   "note": "By label; portalPayerName override wins"
+  },
+  {
+   "action": "click",
+   "selector": "#authWizardNextButton"
+  },
+  {
+   "action": "waitFor",
+   "selector": "#patient.firstName",
+   "timeoutMs": 30000,
+   "note": "CCH Step 1: patient + requesting provider on ONE screen"
+  },
+  {
+   "action": "typeIfPresent",
+   "selector": "#subscriber.memberId",
+   "binding": "patient.memberId",
+   "timeoutMs": 4000
+  },
+  {
+   "action": "typeIfPresent",
+   "selector": "#patient.firstName",
+   "binding": "patient.firstName",
+   "timeoutMs": 4000
+  },
+  {
+   "action": "typeIfPresent",
+   "selector": "#patient.lastName",
+   "binding": "patient.lastName",
+   "timeoutMs": 4000
+  },
+  {
+   "action": "click",
+   "selector": "#patient.birthDate"
+  },
+  {
+   "action": "press",
+   "key": "Control+a"
+  },
+  {
+   "action": "typeActive",
+   "binding": "patient.dob",
+   "transform": "dateMMDDYYYY",
+   "note": "Masked date"
+  },
+  {
+   "action": "select",
+   "selector": "#genderCode",
+   "binding": "patient.gender",
+   "note": "Skips when payload empty"
+  },
+  {
+   "action": "select",
+   "selector": "#patient.subscriberRelationshipCode",
+   "binding": "patient.relationshipCode",
+   "note": "CCH offers 18 Self only"
+  },
+  {
+   "action": "type",
+   "selector": "#search.requestingProvider.npi",
+   "binding": "practice.npi",
+   "note": "CCH requesting = the org: search resolves only payer-enrolled providers (PCPs aren't in the file)"
+  },
+  {
+   "action": "click",
+   "selector": "input[value=\"Retrieve Provider Info\"]:visible"
+  },
+  {
+   "action": "clickInRow",
+   "selector": "input[id^=\"selectProvider\"]:visible",
+   "binding": "practice.address.street",
+   "note": "Pick the practice location by street"
+  },
+  {
+   "action": "typeIfPresent",
+   "selector": "#requestingProvider.contactName",
+   "binding": "practice.contactName",
+   "timeoutMs": 6000,
+   "note": "Auto-filled for interactive sessions, blank for the worker"
+  },
+  {
+   "action": "click",
+   "selector": "#requestingProvider.phone"
+  },
+  {
+   "action": "wait",
+   "ms": 700,
+   "note": "Let the input mask initialize \u2014 a cold mask eats the first keystrokes"
+  },
+  {
+   "action": "press",
+   "key": "Control+a"
+  },
+  {
+   "action": "press",
+   "key": "Delete"
+  },
+  {
+   "action": "typeActive",
+   "binding": "practice.phone",
+   "transform": "digits"
+  },
+  {
+   "action": "press",
+   "key": "Control+a"
+  },
+  {
+   "action": "press",
+   "key": "Delete"
+  },
+  {
+   "action": "typeActive",
+   "binding": "practice.phone",
+   "transform": "digits",
+   "note": "Second pass into the warmed mask \u2014 idempotent, fixes any eaten digits"
+  },
+  {
+   "action": "click",
+   "selector": "#requestingProvider.fax"
+  },
+  {
+   "action": "press",
+   "key": "Control+a"
+  },
+  {
+   "action": "press",
+   "key": "Delete"
+  },
+  {
+   "action": "typeActive",
+   "binding": "practice.fax",
+   "transform": "digits",
+   "note": "Decision letters fax here"
+  },
+  {
+   "action": "click",
+   "selector": "#authWizardNextButton",
+   "note": "Fires eligibility + validation"
+  },
+  {
+   "action": "waitFor",
+   "selector": "#fromDate",
+   "timeoutMs": 40000,
+   "note": "CCH Step 2: Add Service Information"
+  },
+  {
+   "action": "select",
+   "selector": "#serviceTypeCode",
+   "binding": "serviceType.code",
+   "note": "PT/AD/AF portal codes"
+  },
+  {
+   "action": "select",
+   "selector": "#placeOfServiceCode",
+   "binding": "placeOfService.code"
+  },
+  {
+   "action": "click",
+   "selector": "#fromDate"
+  },
+  {
+   "action": "wait",
+   "ms": 700,
+   "note": "First masked field on this page \u2014 same cold-mask guard"
+  },
+  {
+   "action": "press",
+   "key": "Control+a"
+  },
+  {
+   "action": "press",
+   "key": "Delete"
+  },
+  {
+   "action": "typeActive",
+   "binding": "startDate",
+   "transform": "dateMMDDYYYY"
+  },
+  {
+   "action": "press",
+   "key": "Control+a"
+  },
+  {
+   "action": "press",
+   "key": "Delete"
+  },
+  {
+   "action": "typeActive",
+   "binding": "startDate",
+   "transform": "dateMMDDYYYY"
+  },
+  {
+   "action": "click",
+   "selector": "#toDate"
+  },
+  {
+   "action": "press",
+   "key": "Control+a"
+  },
+  {
+   "action": "typeActive",
+   "binding": "endDate",
+   "transform": "dateMMDDYYYY"
+  },
+  {
+   "action": "press",
+   "key": "Escape",
+   "note": "Close the lingering date-picker popup"
+  },
+  {
+   "action": "select",
+   "selector": "#serviceLevelCode",
+   "binding": "serviceLevelCode",
+   "note": "E Elective / U Urgent"
+  },
+  {
+   "action": "click",
+   "selector": "[id=\"s2id_diagnoses.0.code\"]",
+   "note": "Ajax ICD search"
+  },
+  {
+   "action": "typeActive",
+   "binding": "diagnoses.0"
+  },
+  {
+   "action": "wait",
+   "ms": 1500
+  },
+  {
+   "action": "press",
+   "key": "Enter"
+  },
+  {
+   "action": "forEach",
+   "list": "diagnoses",
+   "startIndex": 1,
+   "steps": [
+    {
+     "action": "clickByText",
+     "text": "Add another diagnosis code"
+    },
+    {
+     "action": "click",
+     "selector": "[id=\"s2id_diagnoses.{i}.code\"]"
+    },
+    {
+     "action": "typeActive",
+     "binding": "diagnoses.{i}"
+    },
+    {
+     "action": "wait",
+     "ms": 1500
+    },
+    {
+     "action": "press",
+     "key": "Enter"
+    }
+   ]
+  },
+  {
+   "action": "click",
+   "selector": "[id=\"s2id_procedures.0.code\"]",
+   "note": "Ajax CPT search"
+  },
+  {
+   "action": "typeActive",
+   "binding": "procedures.0.code"
+  },
+  {
+   "action": "wait",
+   "ms": 1500
+  },
+  {
+   "action": "press",
+   "key": "Enter"
+  },
+  {
+   "action": "select",
+   "selector": "#procedures.0.qualifierCode",
+   "value": "HC"
+  },
+  {
+   "action": "type",
+   "selector": "#procedures.0.serviceQuantity",
+   "binding": "procedures.0.units"
+  },
+  {
+   "action": "select",
+   "selector": "#procedures.0.serviceQuantityTypeCode",
+   "value": "FL",
+   "note": "Units"
+  },
+  {
+   "action": "click",
+   "selector": "#procedures.0.fromDate",
+   "note": "CCH wants a date range PER procedure"
+  },
+  {
+   "action": "press",
+   "key": "Control+a"
+  },
+  {
+   "action": "press",
+   "key": "Delete"
+  },
+  {
+   "action": "typeActive",
+   "binding": "startDate",
+   "transform": "dateMMDDYYYY"
+  },
+  {
+   "action": "click",
+   "selector": "#procedures.0.toDate"
+  },
+  {
+   "action": "press",
+   "key": "Control+a"
+  },
+  {
+   "action": "press",
+   "key": "Delete"
+  },
+  {
+   "action": "typeActive",
+   "binding": "endDate",
+   "transform": "dateMMDDYYYY"
+  },
+  {
+   "action": "press",
+   "key": "Escape",
+   "note": "Close the date picker"
+  },
+  {
+   "action": "forEach",
+   "list": "procedures",
+   "startIndex": 1,
+   "steps": [
+    {
+     "action": "clickByText",
+     "text": "Add another procedure code"
+    },
+    {
+     "action": "click",
+     "selector": "[id=\"s2id_procedures.{i}.code\"]"
+    },
+    {
+     "action": "typeActive",
+     "binding": "procedures.{i}.code"
+    },
+    {
+     "action": "wait",
+     "ms": 1500
+    },
+    {
+     "action": "press",
+     "key": "Enter"
+    },
+    {
+     "action": "select",
+     "selector": "#procedures.{i}.qualifierCode",
+     "value": "HC"
+    },
+    {
+     "action": "type",
+     "selector": "#procedures.{i}.serviceQuantity",
+     "binding": "procedures.{i}.units"
+    },
+    {
+     "action": "select",
+     "selector": "#procedures.{i}.serviceQuantityTypeCode",
+     "value": "FL"
+    },
+    {
+     "action": "click",
+     "selector": "#procedures.{i}.fromDate"
+    },
+    {
+     "action": "press",
+     "key": "Control+a"
+    },
+    {
+     "action": "press",
+     "key": "Delete"
+    },
+    {
+     "action": "typeActive",
+     "binding": "startDate",
+     "transform": "dateMMDDYYYY"
+    },
+    {
+     "action": "click",
+     "selector": "#procedures.{i}.toDate"
+    },
+    {
+     "action": "press",
+     "key": "Control+a"
+    },
+    {
+     "action": "press",
+     "key": "Delete"
+    },
+    {
+     "action": "typeActive",
+     "binding": "endDate",
+     "transform": "dateMMDDYYYY"
+    },
+    {
+     "action": "press",
+     "key": "Escape"
+    }
+   ]
+  },
+  {
+   "action": "typeIfPresent",
+   "selector": "#providerNotes.0.message",
+   "binding": "clinicalNotes",
+   "timeoutMs": 4000,
+   "note": "Small char cap \u2014 keep notes short"
+  },
+  {
+   "action": "click",
+   "selector": "#authWizardNextButton",
+   "note": "May fire a real-time payer evaluation"
+  },
+  {
+   "action": "clickIfPresent",
+   "selector": "#nextStepsButton",
+   "timeoutMs": 15000,
+   "note": "Evaluation summary interstitial, if this payer shows one"
+  },
+  {
+   "action": "waitFor",
+   "selector": "#search.renderingProviders.serviceProvider.0.npi",
+   "timeoutMs": 40000,
+   "note": "CCH Step 3: Rendering = treating therapist"
+  },
+  {
+   "action": "type",
+   "selector": "#search.renderingProviders.serviceProvider.0.npi",
+   "binding": "practice.npi",
+   "note": "CCH's search only resolves payer-enrolled entities \u2014 the group, not individual therapists (verified live twice)"
+  },
+  {
+   "action": "click",
+   "selector": "input[value=\"Retrieve Provider Info\"]:visible"
+  },
+  {
+   "action": "clickInRow",
+   "selector": "input[id^=\"selectProvider\"]:visible",
+   "binding": "practice.address.street",
+   "note": "Same street-row pick as requesting"
+  },
+  {
+   "action": "typeIfPresent",
+   "selector": "#renderingProviders.serviceProvider.0.contactName",
+   "binding": "practice.contactName",
+   "timeoutMs": 6000
+  },
+  {
+   "action": "typeIfPresent",
+   "selector": "#renderingProviders.serviceProvider.0.phone",
+   "binding": "practice.phone",
+   "transform": "digits",
+   "timeoutMs": 4000
+  },
+  {
+   "action": "typeIfPresent",
+   "selector": "#renderingProviders.serviceProvider.0.fax",
+   "binding": "practice.fax",
+   "transform": "digits",
+   "timeoutMs": 4000
+  },
+  {
+   "action": "click",
+   "selector": "#authWizardNextButton"
+  },
+  {
+   "action": "clickIfPresent",
+   "selector": "#nextStepsButton",
+   "timeoutMs": 15000,
+   "note": "Evaluation summary can appear after the provider step on this flow"
+  },
+  {
+   "action": "clickIfPresent",
+   "selector": "button:has-text(\"Skip\")",
+   "timeoutMs": 15000,
+   "note": "InterQual medical-necessity review \u2014 SKIPPED by policy (clinical questions stay human; payer reviews necessity manually). Change to complete-InterQual once billers define standard answers."
+  },
+  {
+   "action": "waitFor",
+   "selector": "button:has-text(\"Add File\")",
+   "timeoutMs": 40000,
+   "note": "Attachments step \u2014 CCH requires one (e.g. Plan of Care)"
+  },
+  {
+   "action": "uploadFile",
+   "selector": "#filePicker-1",
+   "binding": "documentPaths.0",
+   "note": "First attached document from Pria; skipped when none \u2014 the portal then blocks Next and the run pauses with a screenshot"
+  },
+  {
+   "action": "wait",
+   "ms": 2000
+  },
+  {
+   "action": "click",
+   "selector": "#authWizardNextButton"
+  },
+  {
+   "action": "wait",
+   "ms": 4000,
+   "note": "Let the review page render"
+  },
+  {
+   "action": "pauseForHuman",
+   "reason": "Filled through the review step (InterQual skipped by policy, attachment uploaded). Verify the screenshot, then click Submit in the portal yourself \u2014 the recipe never clicks Submit. Capture the confirmation page after submitting."
+  }
+ ]
 }

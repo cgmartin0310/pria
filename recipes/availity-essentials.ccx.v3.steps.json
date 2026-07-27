@@ -134,7 +134,7 @@
  {
   "action": "wait",
   "ms": 700,
-  "note": "Let the input mask initialize — a cold mask eats the first keystrokes"
+  "note": "Let the input mask initialize \u2014 a cold mask eats the first keystrokes"
  },
  {
   "action": "press",
@@ -161,7 +161,7 @@
   "action": "typeActive",
   "binding": "practice.phone",
   "transform": "digits",
-  "note": "Second pass into the warmed mask — idempotent, fixes any eaten digits"
+  "note": "Second pass into the warmed mask \u2014 idempotent, fixes any eaten digits"
  },
  {
   "action": "click",
@@ -210,7 +210,7 @@
  {
   "action": "wait",
   "ms": 700,
-  "note": "First masked field on this page — same cold-mask guard"
+  "note": "First masked field on this page \u2014 same cold-mask guard"
  },
  {
   "action": "press",
@@ -464,7 +464,7 @@
   "selector": "#providerNotes.0.message",
   "binding": "clinicalNotes",
   "timeoutMs": 4000,
-  "note": "Small char cap — keep notes short"
+  "note": "Small char cap \u2014 keep notes short"
  },
  {
   "action": "click",
@@ -487,7 +487,7 @@
   "action": "type",
   "selector": "#search.renderingProviders.serviceProvider.0.npi",
   "binding": "practice.npi",
-  "note": "CCH's search only resolves payer-enrolled entities — the group, not individual therapists (verified live twice)"
+  "note": "CCH's search only resolves payer-enrolled entities \u2014 the group, not individual therapists (verified live twice)"
  },
  {
   "action": "click",
@@ -530,11 +530,38 @@
   "note": "Evaluation summary can appear after the provider step on this flow"
  },
  {
+  "action": "clickIfPresent",
+  "selector": "button:has-text(\"Skip\")",
+  "timeoutMs": 15000,
+  "note": "InterQual medical-necessity review \u2014 SKIPPED by policy (clinical questions stay human; payer reviews necessity manually). Change to complete-InterQual once billers define standard answers."
+ },
+ {
+  "action": "waitFor",
+  "selector": "button:has-text(\"Add File\")",
+  "timeoutMs": 40000,
+  "note": "Attachments step \u2014 CCH requires one (e.g. Plan of Care)"
+ },
+ {
+  "action": "uploadFile",
+  "selector": "#filePicker-1",
+  "binding": "documentPaths.0",
+  "note": "First attached document from Pria; skipped when none \u2014 the portal then blocks Next and the run pauses with a screenshot"
+ },
+ {
   "action": "wait",
-  "ms": 3000
+  "ms": 2000
+ },
+ {
+  "action": "click",
+  "selector": "#authWizardNextButton"
+ },
+ {
+  "action": "wait",
+  "ms": 4000,
+  "note": "Let the review page render"
  },
  {
   "action": "pauseForHuman",
-  "reason": "All auth data entered — Carolina Complete now requires its InterQual medical-necessity review, which needs clinical answers from a human. Open the in-progress request in Availity, complete the InterQual questions, attachments if any, review, and Submit. Clinical questionnaires stay human by design."
+  "reason": "Filled through the review step (InterQual skipped by policy, attachment uploaded). Verify the screenshot, then click Submit in the portal yourself \u2014 the recipe never clicks Submit. Capture the confirmation page after submitting."
  }
 ]
