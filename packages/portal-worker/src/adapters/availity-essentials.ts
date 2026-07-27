@@ -216,7 +216,19 @@ export async function submit(input: SubmitInput): Promise<PortalOutcome> {
       await input.onSession(JSON.stringify(await ctx.storageState()));
     }
 
+    // The recipe assumes it starts on the authenticated dashboard — a fresh
+    // tab is about:blank, so land it there (and wait for the shell to render)
+    // before replaying.
     const page = await ctx.newPage();
+    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+    const shellReady = await frameWithSelector(page, [SEL.loggedInMarker], 30_000);
+    if (!shellReady) {
+      return {
+        kind: "needs_human",
+        reason: `Authenticated dashboard did not render at ${page.url()}`,
+        screenshot: await snap(page),
+      };
+    }
     const outcome = await runRecipe(
       page,
       "availity_essentials",
