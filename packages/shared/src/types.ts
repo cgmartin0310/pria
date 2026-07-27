@@ -526,6 +526,9 @@ export interface Authorization extends TimestampedEntity {
 
   decisionMessage?: string;
 
+  /** Clearinghouse-assigned submission id (e.g. Availity service review id). */
+  clearinghouseSubmissionId?: string | null;
+
   /**
    * HCR03 start — Certification/authorization period start date (from response).
    */

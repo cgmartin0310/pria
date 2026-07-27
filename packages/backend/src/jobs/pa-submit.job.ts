@@ -203,23 +203,42 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
 
       const creds = routing.credentials ?? {};
       if (!creds.clientId || !creds.clientSecret) {
-        throw new Error("Availity connection is missing credentials");
+        await routeToPortalOrManual(
+          "Availity connection is missing credentials for the 278 API"
+        );
+        return;
       }
 
       const payload = toServiceReview(assembledRequest, {
         availityPayerId: routing.clearinghousePayerId,
       });
 
-      const result = await availity.submitServiceReview(
-        {
-          clientId: creds.clientId,
-          clientSecret: creds.clientSecret,
-          scope: creds.scope,
-          demo: creds.demo,
-          environment: creds.environment,
-        },
-        payload
-      );
+      // The API rung of the ladder: if the submission call throws, nothing was
+      // filed (submitServiceReview never throws after a successful send), so
+      // falling through to the portal is safe — and correct: an unentitled or
+      // broken API route shouldn't strand the auth.
+      let result;
+      try {
+        result = await availity.submitServiceReview(
+          {
+            clientId: creds.clientId,
+            clientSecret: creds.clientSecret,
+            scope: creds.scope,
+            demo: creds.demo,
+            environment: creds.environment,
+          },
+          payload
+        );
+      } catch (apiErr) {
+        const msg = apiErr instanceof Error ? apiErr.message : String(apiErr);
+        console.warn(
+          `[pa-submit] Availity 278 API failed for auth ${authorizationId}: ${msg}`
+        );
+        await routeToPortalOrManual(
+          `Availity 278 API submission failed (${msg.slice(0, 300)})`
+        );
+        return;
+      }
 
       // Availity returns 202 + a Location to poll; a terminal statusCode may
       // already be present (A1 certified / A3 denied / A4 pended).

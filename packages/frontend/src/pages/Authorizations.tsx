@@ -197,6 +197,8 @@ interface Row {
   approvedVisits: number | null;
   submittedAt: string | null;
   authNumber: string | null;
+  clearinghouseSubmissionId: string | null;
+  decisionCode: string | null;
 }
 
 function toRow(a: AuthorizationWithRelations): Row {
@@ -212,6 +214,8 @@ function toRow(a: AuthorizationWithRelations): Row {
     approvedVisits: a.approvedVisits ?? null,
     submittedAt: a.submittedAt ? String(a.submittedAt) : null,
     authNumber: a.authNumber,
+    clearinghouseSubmissionId: a.clearinghouseSubmissionId ?? null,
+    decisionCode: a.decisionCode ?? null,
   };
 }
 
@@ -400,6 +404,21 @@ export default function Authorizations() {
                             {submitting === auth.id ? "Submitting…" : "Submit"}
                           </Button>
                         )}
+                        {/* A submitted auth with no clearinghouse id and no
+                            decision is stuck — its submit job died. Offer a
+                            re-queue. */}
+                        {auth.status === "submitted" &&
+                          !auth.clearinghouseSubmissionId &&
+                          !auth.decisionCode && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSubmit(auth.id)}
+                              disabled={submitting === auth.id}
+                            >
+                              {submitting === auth.id ? "Retrying…" : "Retry submit"}
+                            </Button>
+                          )}
                       </div>
                     </TableCell>
                   </TableRow>

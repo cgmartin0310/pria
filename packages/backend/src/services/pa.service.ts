@@ -190,28 +190,38 @@ export async function submitAuthorization(
 ) {
   const auth = await getAuthorizationById(authorizationId, practiceId);
   if (!auth) throw new Error("Authorization not found");
-  if (auth.status !== "draft") {
+
+  // A "submitted" auth with no clearinghouse id and no decision is STUCK —
+  // its submit job died before filing anything. Allow re-queueing those.
+  const isStuckRetry =
+    auth.status === "submitted" &&
+    !auth.clearinghouseSubmissionId &&
+    !auth.decisionCode;
+
+  if (auth.status !== "draft" && !isStuckRetry) {
     throw new Error(`Cannot submit authorization in ${auth.status} status`);
   }
 
-  // Mark submitted BEFORE queueing: a fast worker (Test Mode decides instantly)
-  // could otherwise apply the decision first and have it stomped back to
-  // "submitted" by this update. The status guard also makes double-submits
-  // idempotent under concurrency.
-  const [updated] = await db
-    .update(authorizations)
-    .set({ status: "submitted", submittedAt: new Date(), updatedAt: new Date() })
-    .where(
-      and(
-        eq(authorizations.id, authorizationId),
-        eq(authorizations.practiceId, practiceId),
-        eq(authorizations.status, "draft")
+  if (auth.status === "draft") {
+    // Mark submitted BEFORE queueing: a fast worker (Test Mode decides
+    // instantly) could otherwise apply the decision first and have it stomped
+    // back to "submitted" by this update. The status guard also makes
+    // double-submits idempotent under concurrency.
+    const [updated] = await db
+      .update(authorizations)
+      .set({ status: "submitted", submittedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(authorizations.id, authorizationId),
+          eq(authorizations.practiceId, practiceId),
+          eq(authorizations.status, "draft")
+        )
       )
-    )
-    .returning();
+      .returning();
 
-  if (!updated) {
-    throw new Error("Authorization was already submitted");
+    if (!updated) {
+      throw new Error("Authorization was already submitted");
+    }
   }
 
   try {
@@ -232,13 +242,15 @@ export async function submitAuthorization(
   await recordHistory({
     authorizationId,
     action: "submitted",
-    fromStatus: "draft",
+    fromStatus: isStuckRetry ? "submitted" : "draft",
     toStatus: "submitted",
     performedBy: "user",
-    notes: "Queued for EDI submission",
+    notes: isStuckRetry
+      ? "Re-queued a stuck submission (no clearinghouse id, no decision)"
+      : "Queued for EDI submission",
   });
 
-  return updated;
+  return { id: authorizationId, status: "submitted" as const };
 }
 
 // ─── Generate Clinical Summary ────────────────────────────────────────────────
