@@ -165,6 +165,42 @@ export default function NewAuthorization() {
     }
   })();
 
+  // Visit-pattern defaults follow the discipline: OT/PT nearly always 1x/week,
+  // ST usually 2x/week.
+  useEffect(() => {
+    if (!provider?.discipline) return;
+    setVisitsPerPeriod(provider.discipline === "ST" ? "2" : "1");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider?.discipline]);
+
+  // Number of periods derives from the auth window (a 6-month auth ≈ 26 weeks).
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    const ms = new Date(endDate).getTime() - new Date(startDate).getTime();
+    if (!(ms > 0)) return;
+    const days = Math.round(ms / 86_400_000) + 1;
+    const periods =
+      periodFrequency === "WK"
+        ? Math.ceil(days / 7)
+        : periodFrequency === "MO"
+          ? Math.max(1, Math.round(days / 30))
+          : days;
+    setPeriodCount(String(periods));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, periodFrequency]);
+
+  // Total visits follows the pattern (frequency × periods), capped by the
+  // payer's per-auth limit when one is set. Still editable afterward.
+  useEffect(() => {
+    const vpp = parseInt(visitsPerPeriod, 10);
+    const pc = parseInt(periodCount, 10);
+    if (!vpp || !pc) return;
+    const total = vpp * pc;
+    const cap = payerPolicy?.maxVisitsPerAuth;
+    setRequestedVisits(String(cap ? Math.min(total, cap) : total));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visitsPerPeriod, periodCount, payerPolicy?.maxVisitsPerAuth]);
+
   // Free-text escape hatch for codes outside the discipline's usual set.
   const [customCpt, setCustomCpt] = useState("");
   const addCustomCpt = () => {
