@@ -132,14 +132,36 @@
   "selector": "#requestingProvider.phone"
  },
  {
+  "action": "wait",
+  "ms": 700,
+  "note": "Let the input mask initialize — a cold mask eats the first keystrokes"
+ },
+ {
   "action": "press",
   "key": "Control+a"
+ },
+ {
+  "action": "press",
+  "key": "Delete"
+ },
+ {
+  "action": "typeActive",
+  "binding": "practice.phone",
+  "transform": "digits"
+ },
+ {
+  "action": "press",
+  "key": "Control+a"
+ },
+ {
+  "action": "press",
+  "key": "Delete"
  },
  {
   "action": "typeActive",
   "binding": "practice.phone",
   "transform": "digits",
-  "note": "Required masked field"
+  "note": "Second pass into the warmed mask — idempotent, fixes any eaten digits"
  },
  {
   "action": "click",
@@ -148,6 +170,10 @@
  {
   "action": "press",
   "key": "Control+a"
+ },
+ {
+  "action": "press",
+  "key": "Delete"
  },
  {
   "action": "typeActive",
@@ -182,8 +208,30 @@
   "selector": "#fromDate"
  },
  {
+  "action": "wait",
+  "ms": 700,
+  "note": "First masked field on this page — same cold-mask guard"
+ },
+ {
   "action": "press",
   "key": "Control+a"
+ },
+ {
+  "action": "press",
+  "key": "Delete"
+ },
+ {
+  "action": "typeActive",
+  "binding": "startDate",
+  "transform": "dateMMDDYYYY"
+ },
+ {
+  "action": "press",
+  "key": "Control+a"
+ },
+ {
+  "action": "press",
+  "key": "Delete"
  },
  {
   "action": "typeActive",
