@@ -158,6 +158,20 @@ Rendering provider (= treating therapist, Type 1):
   confirmationNumber) — **TODO: snippet the confirmation page on the first
   manual filing.**
 
+## Manual provider entry (captured from a CCH draft, 2026-07-27)
+
+"Enter Manually" on a provider section exposes
+`renderingProviders.serviceProvider.0.{lastName,npi,addressLine1,city,zipCode}`
++ hidden selects `...roleCode` and `...stateCode`. Role options include
+FA Facility, G3 Clinic, QV Group Practice, SJ Service Provider,
+DK Ordering Physician, DN Referring Provider, P3 Primary Care Provider —
+i.e. the future slot for naming a referring/ordering physician not in the
+payer's provider file. CAUTION: the manual path requires "Non-par
+Reasoning" (treats the provider as out-of-network) — for in-network
+providers ALWAYS use search-and-select, never manual. Draft resume does
+NOT preserve the rendering-provider selection (data pages persist; the
+provider pick must be redone).
+
 ## Payer routing learned
 
 - **Healthy Blue NC**: generic wizard REJECTS therapy CPTs (97530 error:
