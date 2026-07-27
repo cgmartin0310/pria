@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input.js";
 import { Badge } from "@/components/ui/badge.js";
 import {
   THERAPY_CPT_CODES,
+  CPT_CATEGORIES,
   CERTIFICATION_TYPES,
   LEVEL_OF_SERVICE_CODES,
   DISCIPLINE_TO_SERVICE_TYPE,
@@ -144,6 +145,35 @@ export default function NewAuthorization() {
     setSelectedCpts((prev) =>
       prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
     );
+
+  // CPT chips filtered to the selected therapist's discipline. Codes like
+  // 97530/97110 are shared PT/OT ground; 97129/97130 are common in peds OT.
+  const OT_SHARED = ["97110", "97112", "97129", "97130", "97150", "97530", "97535"];
+  const PT_EVALS = ["97161", "97162", "97163", "97164"];
+  const cptChoices: Record<string, string> = (() => {
+    const pick = (codes: string[]) =>
+      Object.fromEntries(codes.map((c) => [c, THERAPY_CPT_CODES[c] ?? c]));
+    switch (provider?.discipline) {
+      case "PT":
+        return { ...pick(PT_EVALS), ...CPT_CATEGORIES.PHYSICAL_THERAPY.codes };
+      case "OT":
+        return { ...CPT_CATEGORIES.OCCUPATIONAL_THERAPY.codes, ...pick(OT_SHARED) };
+      case "ST":
+        return { ...CPT_CATEGORIES.SPEECH_THERAPY.codes };
+      default:
+        return THERAPY_CPT_CODES;
+    }
+  })();
+
+  // Free-text escape hatch for codes outside the discipline's usual set.
+  const [customCpt, setCustomCpt] = useState("");
+  const addCustomCpt = () => {
+    const code = customCpt.trim();
+    if (/^\d{5}$/.test(code) && !selectedCpts.includes(code)) {
+      setSelectedCpts((prev) => [...prev, code]);
+    }
+    setCustomCpt("");
+  };
 
   const handleAiGenerate = () => {
     setGenerating(true);
@@ -420,21 +450,50 @@ export default function NewAuthorization() {
             <CardContent className="space-y-4">
               <Field label="CPT Codes">
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(THERAPY_CPT_CODES)
-                    .slice(0, 14)
-                    .map(([code, desc]) => (
+                  {/* Any selected code missing from the discipline set (custom
+                      or from a provider switch) still shows as a chip. */}
+                  {selectedCpts
+                    .filter((code) => !(code in cptChoices))
+                    .map((code) => (
                       <button
                         key={code}
                         onClick={() => toggleCpt(code)}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                          selectedCpts.includes(code)
-                            ? "border-blue-500 bg-blue-50 text-blue-700"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                        }`}
+                        className="rounded-full border border-blue-500 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
                       >
-                        {code} — {desc}
+                        {code} — {THERAPY_CPT_CODES[code] ?? "Custom code"}
                       </button>
                     ))}
+                  {Object.entries(cptChoices).map(([code, desc]) => (
+                    <button
+                      key={code}
+                      onClick={() => toggleCpt(code)}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                        selectedCpts.includes(code)
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      {code} — {desc}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <Input
+                    placeholder="Other 5-digit CPT code"
+                    className="max-w-48"
+                    value={customCpt}
+                    maxLength={5}
+                    onChange={(e) => setCustomCpt(e.target.value.replace(/\D/g, ""))}
+                    onKeyDown={(e) => e.key === "Enter" && addCustomCpt()}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!/^\d{5}$/.test(customCpt.trim())}
+                    onClick={addCustomCpt}
+                  >
+                    Add
+                  </Button>
                 </div>
               </Field>
 
