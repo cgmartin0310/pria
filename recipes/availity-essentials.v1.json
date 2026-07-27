@@ -34,6 +34,7 @@
     { "action": "click", "selector": "input[value=\"Retrieve Provider Info\"]:visible", "note": ":visible — the wizard keeps prior steps' DOM attached" },
     { "action": "clickIfPresent", "selector": "[id=\"selectProvider0\"]:visible", "timeoutMs": 6000, "note": "Select first result; upgrade to clickInRow if referring physicians multi-locate" },
     { "action": "waitFor", "selector": "#requestingProvider.phone", "timeoutMs": 20000 },
+    { "action": "typeIfPresent", "selector": "#requestingProvider.contactName", "binding": "practice.contactName", "timeoutMs": 4000, "note": "Auto-filled on some flows, required-and-empty on others (Carolina Complete)" },
     { "action": "click", "selector": "#requestingProvider.phone" },
     { "action": "press", "key": "Control+a" },
     { "action": "typeActive", "binding": "practice.phone", "transform": "digits", "note": "REQUIRED masked field" },

@@ -28,6 +28,7 @@ export interface PortalSubmissionPayload {
   practice: {
     name: string;
     npi: string;
+    contactName?: string;
     phone?: string;
     fax?: string;
     address?: { street: string; city: string; state: string; zip: string };

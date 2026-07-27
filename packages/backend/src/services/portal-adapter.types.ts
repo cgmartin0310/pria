@@ -53,6 +53,8 @@ export interface PortalSubmissionPayload {
   practice: {
     name: string;
     npi: string;
+    /** Contact person for portal forms that require one (falls back to name). */
+    contactName?: string;
     phone?: string;
     /** Secure fax — payers send decision letters here when portals ask for it. */
     fax?: string;

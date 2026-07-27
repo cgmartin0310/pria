@@ -198,6 +198,9 @@ function buildPayload(auth: {
     practice: {
       name: auth.practice.name,
       npi: auth.practice.npi,
+      // Portals want a contact PERSON; the practice name is an accepted
+      // stand-in until a dedicated contact field exists in Practice Info.
+      contactName: auth.practice.name,
       phone: auth.practice.phone ?? undefined,
       fax: auth.practice.fax ?? undefined,
       address: auth.practice.address ?? undefined,
