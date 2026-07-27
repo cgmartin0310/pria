@@ -156,9 +156,13 @@ async function selectWithFallback(target: Target, selector: string, value: strin
 /** Best-effort JPEG snapshot so a paused submission shows WHAT the page looked like. */
 export async function snap(page: Page): Promise<string | undefined> {
   try {
-    const buf = await page.screenshot({ type: "jpeg", quality: 50 });
+    // Bounded: a page stuck mid-navigation must not hang or void the capture.
+    const buf = await page.screenshot({ type: "jpeg", quality: 50, timeout: 10_000 });
     return buf.toString("base64");
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[snap] screenshot failed: ${err instanceof Error ? err.message : String(err)}`
+    );
     return undefined;
   }
 }

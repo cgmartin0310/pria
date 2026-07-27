@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserContext } from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type Frame, type Page } from "playwright-core";
 import { config } from "../config.js";
 import { totp, totpSecondsRemaining } from "../totp.js";
 import { runRecipe, snap } from "../recipe-engine.js";
@@ -56,8 +56,7 @@ async function isLoggedIn(ctx: BrowserContext): Promise<boolean> {
   const page = await ctx.newPage();
   try {
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
-    if (SEL.loggedInMarker === "TODO") return false; // not wired yet
-    return (await page.$(SEL.loggedInMarker)) !== null;
+    return (await frameWithSelector(page, [SEL.loggedInMarker], 5_000)) !== null;
   } finally {
     await page.close();
   }
@@ -92,35 +91,65 @@ async function login(
   }
 }
 
+/**
+ * Find the frame (main or child) currently containing `selector`. Availity
+ * serves the login form either top-level (availity-fr-ui) or wrapped inside
+ * the navigation shell's iframe — the worker must handle both.
+ */
+async function frameWithSelector(
+  page: Page,
+  selectors: string[],
+  timeoutMs: number
+): Promise<{ frame: Frame; selector: string } | null> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    for (const frame of page.frames()) {
+      for (const selector of selectors) {
+        try {
+          if (await frame.$(selector)) return { frame, selector };
+        } catch {
+          /* frame can detach mid-scan — keep looking */
+        }
+      }
+    }
+    if (Date.now() > deadline) return null;
+    await page.waitForTimeout(500);
+  }
+}
+
 async function loginFlow(
-  page: import("playwright-core").Page,
+  page: Page,
   creds: PortalCredentials
 ): Promise<PortalOutcome | null> {
   await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
-  // The login page is an Angular SPA — give it a real chance to render.
-  await page.waitForSelector(SEL.username, { timeout: 60_000 });
-  await page.fill(SEL.username, creds.username);
-  await page.fill(SEL.password, creds.password);
-  await page.click(SEL.loginButton);
 
-  // Three possible next screens: already signed in (trusted session),
-  // the 2-Step method picker, or the code screen directly.
-  const landed = await page
-    .waitForSelector(
-      `${SEL.loggedInMarker}, ${SEL.mfaCodeInput}, ${SEL.mfaMethodRadios}`,
-      { timeout: 30_000 }
-    )
-    .catch(() => null);
+  // The login form may render top-level or inside an iframe (the observed
+  // redirect to the navigation shell wraps it) — find it wherever it lives.
+  const loginAt = await frameWithSelector(page, [SEL.username], 60_000);
+  if (!loginAt) {
+    throw new Error("login form (#userId) not found in any frame");
+  }
+  await loginAt.frame.fill(SEL.username, creds.username);
+  await loginAt.frame.fill(SEL.password, creds.password);
+  await loginAt.frame.click(SEL.loginButton);
+
+  // Three possible next screens — signed in, 2-Step method picker, or the
+  // code screen directly — each possibly framed.
+  const landed = await frameWithSelector(
+    page,
+    [SEL.loggedInMarker, SEL.mfaCodeInput, SEL.mfaMethodRadios],
+    45_000
+  );
   if (!landed) {
     return {
       kind: "needs_human",
-      reason: "Login did not reach a recognized screen (bad credentials? new flow?)",
+      reason: `Login did not reach a recognized screen at ${page.url()} (bad credentials? new flow?)`,
       screenshot: await snap(page),
     };
   }
 
   // Method picker → choose the authenticator app, by label text.
-  if (!(await page.$(SEL.loggedInMarker)) && (await page.$(SEL.mfaMethodRadios))) {
+  if (landed.selector === SEL.mfaMethodRadios) {
     if (!creds.totpSeed) {
       return {
         kind: "needs_mfa",
@@ -128,16 +157,17 @@ async function loginFlow(
         screenshot: await snap(page),
       };
     }
-    await page.getByText(SEL.mfaAuthenticatorLabel, { exact: false }).first().click();
-    await page.click(SEL.mfaSubmit);
+    await landed.frame
+      .getByText(SEL.mfaAuthenticatorLabel, { exact: false })
+      .first()
+      .click();
+    await landed.frame.click(SEL.mfaSubmit);
   }
 
   // Code screen → generate and enter the TOTP.
-  if (!(await page.$(SEL.loggedInMarker))) {
-    const codeInput = await page
-      .waitForSelector(SEL.mfaCodeInput, { timeout: 15_000 })
-      .catch(() => null);
-    if (codeInput) {
+  if (landed.selector !== SEL.loggedInMarker) {
+    const codeAt = await frameWithSelector(page, [SEL.mfaCodeInput], 20_000);
+    if (codeAt) {
       if (!creds.totpSeed) {
         return {
           kind: "needs_mfa",
@@ -150,18 +180,18 @@ async function loginFlow(
       if (totpSecondsRemaining() < 5) {
         await page.waitForTimeout((totpSecondsRemaining() + 1) * 1000);
       }
-      await page.fill(SEL.mfaCodeInput, totp(creds.totpSeed));
-      await page.click(SEL.mfaSubmit);
+      await codeAt.frame.fill(SEL.mfaCodeInput, totp(creds.totpSeed));
+      await codeAt.frame.click(SEL.mfaSubmit);
     }
   }
 
-  try {
-    await page.waitForSelector(SEL.loggedInMarker, { timeout: 30_000 });
-  } catch {
+  const signedIn = await frameWithSelector(page, [SEL.loggedInMarker], 30_000);
+  if (!signedIn) {
     return {
       kind: "needs_human",
       reason:
-        "Login did not reach the signed-in state after MFA (code rejected? seed out of sync?)",
+        `Login did not reach the signed-in state after MFA at ${page.url()} ` +
+        "(code rejected? seed out of sync?)",
       screenshot: await snap(page),
     };
   }
