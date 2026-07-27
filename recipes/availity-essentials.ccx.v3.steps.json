@@ -258,21 +258,6 @@
  },
  {
   "action": "select",
-  "selector": "#quantityTypeCode",
-  "value": "VS",
-  "note": "Visits — BEFORE the number: some flows reveal the quantity input only after its type is chosen"
- },
- {
-  "action": "wait",
-  "ms": 800
- },
- {
-  "action": "type",
-  "selector": "#quantity",
-  "binding": "requestedVisits"
- },
- {
-  "action": "select",
   "selector": "#serviceLevelCode",
   "binding": "serviceLevelCode",
   "note": "E Elective / U Urgent"
