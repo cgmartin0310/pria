@@ -78,6 +78,13 @@
       "when": 1784900000000,
       "tag": "0010_payer_auth_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785000000000,
+      "tag": "0011_supports278_from_directory",
+      "breakpoints": true
     }
   ]
 }

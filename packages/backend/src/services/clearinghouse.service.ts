@@ -512,7 +512,13 @@ export async function addPayer(
 
   if (!canonical) throw new ClearinghouseError(500, "Failed to save payer");
 
-  // Link it to THIS practice's payer list (278 assumed capable by default).
+  // Link it to THIS practice's payer list. 278-API capability follows the
+  // directory's word: api278 "yes" → true, "no" → false (portal route).
+  // Manual adds without capability data keep the old assume-true default
+  // (Test Mode's simulated payers rely on it).
+  const supports278 = payer.capabilities
+    ? payer.capabilities["api278"] === "yes"
+    : true;
   await db
     .insert(clearinghousePayers)
     .values({
@@ -520,7 +526,7 @@ export async function addPayer(
       clearinghouseId: conn.clearinghouseId,
       payerId: canonical.id,
       clearinghousePayerId: payer.clearinghousePayerId,
-      supports278: true,
+      supports278,
       capabilities: payer.capabilities ?? null,
     })
     .onConflictDoUpdate({
@@ -531,6 +537,7 @@ export async function addPayer(
       ],
       set: {
         clearinghousePayerId: payer.clearinghousePayerId,
+        supports278,
         capabilities: payer.capabilities ?? null,
         updatedAt: new Date(),
       },
