@@ -340,6 +340,46 @@
   "note": "Units"
  },
  {
+  "action": "click",
+  "selector": "#procedures.0.fromDate",
+  "note": "CCH wants a date range PER procedure"
+ },
+ {
+  "action": "press",
+  "key": "Control+a"
+ },
+ {
+  "action": "press",
+  "key": "Delete"
+ },
+ {
+  "action": "typeActive",
+  "binding": "startDate",
+  "transform": "dateMMDDYYYY"
+ },
+ {
+  "action": "click",
+  "selector": "#procedures.0.toDate"
+ },
+ {
+  "action": "press",
+  "key": "Control+a"
+ },
+ {
+  "action": "press",
+  "key": "Delete"
+ },
+ {
+  "action": "typeActive",
+  "binding": "endDate",
+  "transform": "dateMMDDYYYY"
+ },
+ {
+  "action": "press",
+  "key": "Escape",
+  "note": "Close the date picker"
+ },
+ {
   "action": "forEach",
   "list": "procedures",
   "startIndex": 1,
@@ -378,6 +418,44 @@
     "action": "select",
     "selector": "#procedures.{i}.serviceQuantityTypeCode",
     "value": "FL"
+   },
+   {
+    "action": "click",
+    "selector": "#procedures.{i}.fromDate"
+   },
+   {
+    "action": "press",
+    "key": "Control+a"
+   },
+   {
+    "action": "press",
+    "key": "Delete"
+   },
+   {
+    "action": "typeActive",
+    "binding": "startDate",
+    "transform": "dateMMDDYYYY"
+   },
+   {
+    "action": "click",
+    "selector": "#procedures.{i}.toDate"
+   },
+   {
+    "action": "press",
+    "key": "Control+a"
+   },
+   {
+    "action": "press",
+    "key": "Delete"
+   },
+   {
+    "action": "typeActive",
+    "binding": "endDate",
+    "transform": "dateMMDDYYYY"
+   },
+   {
+    "action": "press",
+    "key": "Escape"
    }
   ]
  },

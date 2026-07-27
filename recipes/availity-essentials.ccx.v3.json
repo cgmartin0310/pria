@@ -1,6 +1,6 @@
 {
   "portalKey": "availity_essentials",
-  "name": "Availity Essentials outpatient therapy auth v6 (Carolina Complete flow)",
+  "name": "Availity Essentials outpatient therapy auth v7 (Carolina Complete flow)",
   "activate": true,
   "steps": [
     { "action": "clickByText", "text": "Patient Registration", "note": "Top nav (main document)" },
@@ -80,6 +80,15 @@
     { "action": "select", "selector": "#procedures.0.qualifierCode", "value": "HC" },
     { "action": "type", "selector": "#procedures.0.serviceQuantity", "binding": "procedures.0.units" },
     { "action": "select", "selector": "#procedures.0.serviceQuantityTypeCode", "value": "FL", "note": "Units" },
+    { "action": "click", "selector": "#procedures.0.fromDate", "note": "CCH wants a date range PER procedure" },
+    { "action": "press", "key": "Control+a" },
+    { "action": "press", "key": "Delete" },
+    { "action": "typeActive", "binding": "startDate", "transform": "dateMMDDYYYY" },
+    { "action": "click", "selector": "#procedures.0.toDate" },
+    { "action": "press", "key": "Control+a" },
+    { "action": "press", "key": "Delete" },
+    { "action": "typeActive", "binding": "endDate", "transform": "dateMMDDYYYY" },
+    { "action": "press", "key": "Escape", "note": "Close the date picker" },
     { "action": "forEach", "list": "procedures", "startIndex": 1, "steps": [
       { "action": "clickByText", "text": "Add another procedure code" },
       { "action": "click", "selector": "[id=\"s2id_procedures.{i}.code\"]" },
@@ -88,7 +97,16 @@
       { "action": "press", "key": "Enter" },
       { "action": "select", "selector": "#procedures.{i}.qualifierCode", "value": "HC" },
       { "action": "type", "selector": "#procedures.{i}.serviceQuantity", "binding": "procedures.{i}.units" },
-      { "action": "select", "selector": "#procedures.{i}.serviceQuantityTypeCode", "value": "FL" }
+      { "action": "select", "selector": "#procedures.{i}.serviceQuantityTypeCode", "value": "FL" },
+      { "action": "click", "selector": "#procedures.{i}.fromDate" },
+      { "action": "press", "key": "Control+a" },
+      { "action": "press", "key": "Delete" },
+      { "action": "typeActive", "binding": "startDate", "transform": "dateMMDDYYYY" },
+      { "action": "click", "selector": "#procedures.{i}.toDate" },
+      { "action": "press", "key": "Control+a" },
+      { "action": "press", "key": "Delete" },
+      { "action": "typeActive", "binding": "endDate", "transform": "dateMMDDYYYY" },
+      { "action": "press", "key": "Escape" }
     ] },
 
     { "action": "typeIfPresent", "selector": "#providerNotes.0.message", "binding": "clinicalNotes", "timeoutMs": 4000, "note": "Small char cap — keep notes short" },
