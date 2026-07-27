@@ -1,0 +1,104 @@
+{
+  "portalKey": "availity_essentials",
+  "name": "Availity Essentials outpatient therapy auth v3 (Carolina Complete flow)",
+  "activate": true,
+  "steps": [
+    { "action": "clickByText", "text": "Patient Registration", "note": "Top nav (main document)" },
+    { "action": "clickByText", "text": "Authorizations & Referrals" },
+    { "action": "useFrame", "urlIncludes": "onboarding-ui-apps", "timeoutMs": 20000, "note": "A&R apps render inside this iframe" },
+    { "action": "waitFor", "selector": "#NAVIGATION-authorizations", "timeoutMs": 20000 },
+    { "action": "click", "selector": "#NAVIGATION-authorizations" },
+    { "action": "clickByText", "text": "New Request" },
+
+    { "action": "waitFor", "selector": "#authWizardNextButton", "timeoutMs": 20000, "note": "Payer page" },
+    { "action": "select", "selector": "#organization", "binding": "practice.name" },
+    { "action": "select", "selector": "#requestType", "value": "HS", "note": "Outpatient Authorization" },
+    { "action": "select", "selector": "#payer", "binding": "payerName", "note": "By label; portalPayerName override wins" },
+    { "action": "click", "selector": "#authWizardNextButton" },
+
+    { "action": "waitFor", "selector": "#patient.firstName", "timeoutMs": 30000, "note": "CCH Step 1: patient + requesting provider on ONE screen" },
+    { "action": "typeIfPresent", "selector": "#subscriber.memberId", "binding": "patient.memberId", "timeoutMs": 4000 },
+    { "action": "typeIfPresent", "selector": "#patient.firstName", "binding": "patient.firstName", "timeoutMs": 4000 },
+    { "action": "typeIfPresent", "selector": "#patient.lastName", "binding": "patient.lastName", "timeoutMs": 4000 },
+    { "action": "click", "selector": "#patient.birthDate" },
+    { "action": "press", "key": "Control+a" },
+    { "action": "typeActive", "binding": "patient.dob", "transform": "dateMMDDYYYY", "note": "Masked date" },
+    { "action": "select", "selector": "#genderCode", "binding": "patient.gender", "note": "Skips when payload empty" },
+    { "action": "select", "selector": "#patient.subscriberRelationshipCode", "binding": "patient.relationshipCode", "note": "CCH offers 18 Self only" },
+
+    { "action": "type", "selector": "#search.requestingProvider.npi", "binding": "practice.npi", "note": "CCH requesting = the org: search resolves only payer-enrolled providers (PCPs aren't in the file)" },
+    { "action": "click", "selector": "input[value=\"Retrieve Provider Info\"]:visible" },
+    { "action": "clickInRow", "selector": "input[id^=\"selectProvider\"]:visible", "binding": "practice.address.street", "note": "Pick the practice location by street" },
+    { "action": "typeIfPresent", "selector": "#requestingProvider.contactName", "binding": "practice.contactName", "timeoutMs": 6000, "note": "Auto-filled for interactive sessions, blank for the worker" },
+    { "action": "click", "selector": "#requestingProvider.phone" },
+    { "action": "press", "key": "Control+a" },
+    { "action": "typeActive", "binding": "practice.phone", "transform": "digits", "note": "Required masked field" },
+    { "action": "click", "selector": "#requestingProvider.fax" },
+    { "action": "press", "key": "Control+a" },
+    { "action": "typeActive", "binding": "practice.fax", "transform": "digits", "note": "Decision letters fax here" },
+    { "action": "click", "selector": "#authWizardNextButton", "note": "Fires eligibility + validation" },
+
+    { "action": "waitFor", "selector": "#fromDate", "timeoutMs": 40000, "note": "CCH Step 2: Add Service Information" },
+    { "action": "select", "selector": "#serviceTypeCode", "binding": "serviceType.code", "note": "PT/AD/AF portal codes" },
+    { "action": "select", "selector": "#placeOfServiceCode", "binding": "placeOfService.code" },
+    { "action": "click", "selector": "#fromDate" },
+    { "action": "press", "key": "Control+a" },
+    { "action": "typeActive", "binding": "startDate", "transform": "dateMMDDYYYY" },
+    { "action": "click", "selector": "#toDate" },
+    { "action": "press", "key": "Control+a" },
+    { "action": "typeActive", "binding": "endDate", "transform": "dateMMDDYYYY" },
+    { "action": "type", "selector": "#quantity", "binding": "requestedVisits" },
+    { "action": "select", "selector": "#quantityTypeCode", "value": "VS", "note": "Visits" },
+    { "action": "select", "selector": "#serviceLevelCode", "binding": "serviceLevelCode", "note": "E Elective / U Urgent" },
+
+    { "action": "click", "selector": "[id=\"s2id_diagnoses.0.code\"]", "note": "Ajax ICD search" },
+    { "action": "typeActive", "binding": "diagnoses.0" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "press", "key": "Enter" },
+    { "action": "forEach", "list": "diagnoses", "startIndex": 1, "steps": [
+      { "action": "clickByText", "text": "Add another diagnosis code" },
+      { "action": "click", "selector": "[id=\"s2id_diagnoses.{i}.code\"]" },
+      { "action": "typeActive", "binding": "diagnoses.{i}" },
+      { "action": "wait", "ms": 1500 },
+      { "action": "press", "key": "Enter" }
+    ] },
+
+    { "action": "click", "selector": "[id=\"s2id_procedures.0.code\"]", "note": "Ajax CPT search" },
+    { "action": "typeActive", "binding": "procedures.0.code" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "press", "key": "Enter" },
+    { "action": "select", "selector": "#procedures.0.qualifierCode", "value": "HC" },
+    { "action": "type", "selector": "#procedures.0.serviceQuantity", "binding": "procedures.0.units" },
+    { "action": "select", "selector": "#procedures.0.serviceQuantityTypeCode", "value": "FL", "note": "Units" },
+    { "action": "forEach", "list": "procedures", "startIndex": 1, "steps": [
+      { "action": "clickByText", "text": "Add another procedure code" },
+      { "action": "click", "selector": "[id=\"s2id_procedures.{i}.code\"]" },
+      { "action": "typeActive", "binding": "procedures.{i}.code" },
+      { "action": "wait", "ms": 1500 },
+      { "action": "press", "key": "Enter" },
+      { "action": "select", "selector": "#procedures.{i}.qualifierCode", "value": "HC" },
+      { "action": "type", "selector": "#procedures.{i}.serviceQuantity", "binding": "procedures.{i}.units" },
+      { "action": "select", "selector": "#procedures.{i}.serviceQuantityTypeCode", "value": "FL" }
+    ] },
+
+    { "action": "typeIfPresent", "selector": "#providerNotes.0.message", "binding": "clinicalNotes", "timeoutMs": 4000, "note": "Small char cap — keep notes short" },
+    { "action": "click", "selector": "#authWizardNextButton", "note": "May fire a real-time payer evaluation" },
+
+    { "action": "clickIfPresent", "selector": "#nextStepsButton", "timeoutMs": 15000, "note": "Evaluation summary interstitial, if this payer shows one" },
+
+    { "action": "waitFor", "selector": "#search.renderingProviders.serviceProvider.0.npi", "timeoutMs": 40000, "note": "CCH Step 3: Rendering = treating therapist" },
+    { "action": "type", "selector": "#search.renderingProviders.serviceProvider.0.npi", "binding": "provider.npi" },
+    { "action": "click", "selector": "input[value=\"Retrieve Provider Info\"]:visible" },
+    { "action": "clickIfPresent", "selector": "[id=\"selectProvider0\"]:visible", "timeoutMs": 8000, "note": "Individual NPI usually returns one row" },
+    { "action": "typeIfPresent", "selector": "#renderingProviders.serviceProvider.0.contactName", "binding": "practice.contactName", "timeoutMs": 6000 },
+    { "action": "typeIfPresent", "selector": "#renderingProviders.serviceProvider.0.phone", "binding": "practice.phone", "transform": "digits", "timeoutMs": 4000 },
+    { "action": "typeIfPresent", "selector": "#renderingProviders.serviceProvider.0.fax", "binding": "practice.fax", "transform": "digits", "timeoutMs": 4000 },
+    { "action": "click", "selector": "#authWizardNextButton" },
+
+    { "action": "waitFor", "selector": "button:has-text(\"Add File\")", "timeoutMs": 30000, "note": "CCH Step 4: Attachments — skippable" },
+    { "action": "click", "selector": "#authWizardNextButton" },
+
+    { "action": "wait", "ms": 4000, "note": "Let the review page render" },
+    { "action": "pauseForHuman", "reason": "Filled through the review step — verify the screenshot, then click Submit in the portal yourself (trust policy: the recipe never clicks Submit). Run the field snippet on the confirmation page after submitting." }
+  ]
+}
