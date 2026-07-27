@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table.js";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs.js";
 import { formatDate } from "@/lib/utils.js";
-import { authorizationsApi, type Preview278 } from "@/lib/api.js";
+import { authDocsApi, authorizationsApi, type Preview278 } from "@/lib/api.js";
 import type { PAStatus, AuthorizationWithRelations } from "@pria/shared";
 
 // ─── 278 Preview Dialog ─────────────────────────────────────────────────────────
@@ -227,6 +227,46 @@ export default function Authorizations() {
   const [previewFor, setPreviewFor] = useState<Row | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [attaching, setAttaching] = useState<string | null>(null);
+
+  // Attach a document (e.g. the Plan of Care) — portals like Carolina
+  // Complete require one; the worker uploads it during filing.
+  const handleAttach = (authId: string) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.tif,.tiff,.txt";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) {
+        setSubmitError("File too large — 10 MB max.");
+        return;
+      }
+      setAttaching(authId);
+      setSubmitError(null);
+      try {
+        const dataBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () =>
+            resolve(String(reader.result).split(",")[1] ?? "");
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        });
+        await authDocsApi.upload(authId, {
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          dataBase64,
+        });
+      } catch (e) {
+        setSubmitError(
+          (e as { message?: string })?.message ?? "Document upload failed."
+        );
+      } finally {
+        setAttaching(null);
+      }
+    };
+    input.click();
+  };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -393,6 +433,14 @@ export default function Authorizations() {
                         >
                           <FileCode className="h-3.5 w-3.5" />
                           Preview 278
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleAttach(auth.id)}
+                          disabled={attaching === auth.id}
+                        >
+                          {attaching === auth.id ? "Uploading…" : "Attach doc"}
                         </Button>
                         {auth.status === "draft" && (
                           <Button

@@ -124,6 +124,18 @@ export type RecipeStep =
       note?: string;
     }
   | {
+      /**
+       * Upload an attachment into a file input. binding resolves a worker-side
+       * temp path (documentPaths.N); skips silently when no document exists —
+       * portal validation then blocks and pauses with a screenshot if required.
+       */
+      action: "uploadFile";
+      selector: string;
+      binding?: RecipeBinding;
+      value?: string;
+      note?: string;
+    }
+  | {
       /** Fixed pause, e.g. letting an ajax Select2 load results before Enter. */
       action: "wait";
       ms: number;

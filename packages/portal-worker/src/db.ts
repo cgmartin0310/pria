@@ -82,6 +82,20 @@ export const authorizationHistory = pgTable("authorization_history", {
 const { Pool } = pg;
 const pool = new Pool({ connectionString: config.databaseUrl, max: 5 });
 
+export const authorizationDocuments = pgTable("authorization_documents", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  authorizationId: varchar("authorization_id", { length: 26 }).notNull(),
+  fileName: varchar("file_name", { length: 255 }),
+  mimeType: varchar("mime_type", { length: 100 }),
+  fileData: text("file_data"),
+});
+
 export const db = drizzle(pool, {
-  schema: { portalSubmissions, portalConnections, portalRecipes, authorizations },
+  schema: {
+    portalSubmissions,
+    portalConnections,
+    portalRecipes,
+    authorizations,
+    authorizationDocuments,
+  },
 });

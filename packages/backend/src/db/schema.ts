@@ -41,6 +41,7 @@ export const documentTypeEnum = pgEnum("document_type", [
   "clinical_note",
   "letter_of_necessity",
   "appeal",
+  "attachment",
 ]);
 
 // ─── Practices ────────────────────────────────────────────────────────────────
@@ -428,6 +429,11 @@ export const authorizationDocuments = pgTable(
     type: documentTypeEnum("type").notNull(),
     content: text("content").notNull(),
     aiGenerated: boolean("ai_generated").notNull().default(false),
+    // ─ Uploaded file attachments (portals require e.g. the Plan of Care) ─
+    fileName: varchar("file_name", { length: 255 }),
+    mimeType: varchar("mime_type", { length: 100 }),
+    /** Base64 file bytes — PoC/eval PDFs are small; Postgres holds them fine. */
+    fileData: text("file_data"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("auth_docs_auth_id_idx").on(t.authorizationId)]

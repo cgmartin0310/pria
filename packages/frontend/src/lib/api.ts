@@ -127,6 +127,18 @@ export const patientsApi = {
     api.patch<ApiResponse<Patient>>(`/patients/${id}`, data),
 };
 
+export const authDocsApi = {
+  upload: (authId: string, data: { fileName: string; mimeType: string; dataBase64: string }) =>
+    api.post<ApiResponse<{ id: string; fileName: string }>>(
+      `/authorizations/${authId}/documents`,
+      data
+    ),
+  list: (authId: string) =>
+    api.get<ApiResponse<{ id: string; fileName: string }[]>>(
+      `/authorizations/${authId}/documents`
+    ),
+};
+
 export const payersApi = {
   list: () => api.get<ApiResponse<Payer[]>>("/payers"),
   get: (id: string) => api.get<ApiResponse<Payer>>(`/payers/${id}`),

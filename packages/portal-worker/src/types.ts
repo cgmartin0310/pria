@@ -41,6 +41,8 @@ export interface PortalSubmissionPayload {
   cptCodes: string[];
   /** Per-procedure: units per visit (PT/OT timed 15-min units; speech = 1). */
   procedures?: { code: string; units: number }[];
+  /** Local temp-file paths of downloaded attachments, set by the worker. */
+  documentPaths?: string[];
   requestedVisits?: number;
   startDate?: string;
   endDate?: string;
@@ -62,6 +64,7 @@ export type RecipeStep =
   | { action: "typeActive"; value?: string; binding?: string; transform?: RecipeTransform; note?: string }
   | { action: "press"; key: string; note?: string }
   | { action: "wait"; ms: number; note?: string }
+  | { action: "uploadFile"; selector: string; binding?: string; value?: string; note?: string }
   | { action: "select"; selector: string; value?: string; binding?: string; note?: string }
   | { action: "check"; selector: string; note?: string }
   | { action: "captureText"; selector: string; store: "confirmationNumber"; note?: string }

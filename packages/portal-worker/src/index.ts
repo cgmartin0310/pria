@@ -1,6 +1,9 @@
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
 import { eq, and, isNull } from "drizzle-orm";
+import { writeFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { config } from "./config.js";
 import {
   db,
@@ -9,6 +12,7 @@ import {
   portalRecipes,
   authorizations,
   authorizationHistory,
+  authorizationDocuments,
 } from "./db.js";
 import { decryptSecret, encryptSecret } from "./crypto.js";
 import * as availityEssentials from "./adapters/availity-essentials.js";
@@ -106,11 +110,31 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
       attempts: (sub.attempts ?? 0) + 1,
     });
 
+    // Materialize uploaded attachments as temp files so recipes can
+    // setInputFiles them (portals like CCH require e.g. the Plan of Care).
+    const docs = await db.query.authorizationDocuments.findMany({
+      where: eq(authorizationDocuments.authorizationId, sub.authorizationId),
+    });
+    let docDir: string | null = null;
+    const documentPaths: string[] = [];
+    for (const doc of docs) {
+      if (!doc.fileData || !doc.fileName) continue;
+      docDir = docDir ?? (await mkdtemp(join(tmpdir(), "pria-docs-")));
+      const filePath = join(docDir, doc.fileName.replace(/[^\w.\-]/g, "_"));
+      await writeFile(filePath, Buffer.from(doc.fileData, "base64"));
+      documentPaths.push(filePath);
+    }
+
+    const payload = {
+      ...(sub.payload as PortalSubmissionPayload),
+      documentPaths,
+    };
+
     const outcome = await adapter({
       credentials,
       sessionState,
       recipeSteps: recipe.steps as RecipeStep[],
-      payload: sub.payload as PortalSubmissionPayload,
+      payload,
       onSession: async (storageStateJson) => {
         await db
           .update(portalConnections)
@@ -122,6 +146,10 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
           .where(eq(portalConnections.id, conn.id));
       },
     });
+
+    if (docDir) {
+      await rm(docDir, { recursive: true, force: true }).catch(() => {});
+    }
 
     switch (outcome.kind) {
       case "submitted": {

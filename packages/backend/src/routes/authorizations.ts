@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import * as paService from "../services/pa.service.js";
 import { previewX278 } from "../services/edi-assembler.service.js";
+import { eq, and } from "drizzle-orm";
+import { db, schema } from "../db/index.js";
 
 const createAuthSchema = z.object({
   patientId: z.string(),
@@ -134,5 +136,83 @@ export async function authorizationRoutes(app: FastifyInstance) {
         statusCode: 500,
       });
     }
+  });
+
+  // ── Document attachments (portals require e.g. the Plan of Care) ──
+
+  const uploadSchema = z.object({
+    fileName: z.string().min(1).max(255),
+    mimeType: z.string().min(1).max(100),
+    /** Base64 file bytes; ~10 MB decoded cap. */
+    dataBase64: z.string().min(1).max(14_000_000),
+  });
+
+  app.post(
+    "/authorizations/:id/documents",
+    { bodyLimit: 15 * 1024 * 1024 },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const parsed = uploadSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "VALIDATION_ERROR",
+          message: "Invalid document upload",
+          statusCode: 400,
+          details: parsed.error.flatten(),
+        });
+      }
+
+      const auth = await db.query.authorizations.findFirst({
+        columns: { id: true },
+        where: and(
+          eq(schema.authorizations.id, id),
+          eq(schema.authorizations.practiceId, req.auth.practiceId)
+        ),
+      });
+      if (!auth) {
+        return reply.status(404).send({
+          error: "NOT_FOUND",
+          message: "Authorization not found",
+          statusCode: 404,
+        });
+      }
+
+      const [doc] = await db
+        .insert(schema.authorizationDocuments)
+        .values({
+          authorizationId: id,
+          type: "attachment",
+          content: parsed.data.fileName,
+          fileName: parsed.data.fileName,
+          mimeType: parsed.data.mimeType,
+          fileData: parsed.data.dataBase64,
+        })
+        .returning({ id: schema.authorizationDocuments.id });
+
+      return reply.status(201).send({ data: { id: doc?.id, fileName: parsed.data.fileName } });
+    }
+  );
+
+  app.get("/authorizations/:id/documents", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const auth = await db.query.authorizations.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(schema.authorizations.id, id),
+        eq(schema.authorizations.practiceId, req.auth.practiceId)
+      ),
+    });
+    if (!auth) {
+      return reply.status(404).send({
+        error: "NOT_FOUND",
+        message: "Authorization not found",
+        statusCode: 404,
+      });
+    }
+    const docs = await db.query.authorizationDocuments.findMany({
+      columns: { id: true, fileName: true, mimeType: true, type: true, createdAt: true },
+      where: eq(schema.authorizationDocuments.authorizationId, id),
+    });
+    return reply.send({ data: docs.filter((d) => d.fileName) });
   });
 }

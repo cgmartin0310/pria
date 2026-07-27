@@ -304,6 +304,19 @@ async function execSteps(
         case "wait":
           await page.waitForTimeout(step.ms);
           break;
+        case "uploadFile": {
+          const filePath = valueFor(step);
+          // No attachment on the auth → skip; if the portal requires one, its
+          // own validation blocks the next step and the run pauses with a
+          // screenshot showing exactly that.
+          if (!filePath) break;
+          const input = await state.target.waitForSelector(
+            fixSelector(sub(step.selector)),
+            { timeout: 15_000, state: "attached" }
+          );
+          await input.setInputFiles(filePath);
+          break;
+        }
         case "select": {
           const value = valueFor(step);
           // A BOUND select with an empty payload value is an optional field
