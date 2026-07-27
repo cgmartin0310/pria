@@ -94,6 +94,10 @@ async function clickInRow(target: Target, selector: string, text: string): Promi
     handles = await target.$$(selector);
   }
   if (handles.length === 0) throw new Error(`clickInRow: no elements match ${selector}`);
+  // The in-page ancestor walk runs through the browser's NATIVE
+  // querySelectorAll, which rejects Playwright-only pseudo-classes like
+  // :visible — strip them for that side only.
+  const cssSelector = selector.replace(/:visible/g, "");
   for (const handle of handles) {
     const matches = await handle.evaluate(
       (el, args) => {
@@ -104,7 +108,7 @@ async function clickInRow(target: Target, selector: string, text: string): Promi
         }
         return (node.textContent ?? "").toUpperCase().includes(args.needle);
       },
-      { selector, needle }
+      { selector: cssSelector, needle }
     );
     if (matches) {
       await handle.click();
