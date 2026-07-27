@@ -379,12 +379,46 @@ export async function getSubmission(practiceId: string, submissionId: string) {
  * the queue for the worker pool.
  */
 export async function retrySubmission(practiceId: string, submissionId: string) {
+  // Rebuild the payload from CURRENT data — a retry usually follows a fix
+  // (patient edited, practice settings updated, new payload fields shipped),
+  // and replaying a stale snapshot would silently ignore it.
+  const existing = await db.query.portalSubmissions.findFirst({
+    where: and(
+      eq(portalSubmissions.id, submissionId),
+      eq(portalSubmissions.practiceId, practiceId)
+    ),
+  });
+  if (!existing) throw new PortalError(404, "Submission not found");
+
+  const auth = await db.query.authorizations.findFirst({
+    where: and(
+      eq(authorizations.id, existing.authorizationId),
+      eq(authorizations.practiceId, practiceId)
+    ),
+    with: { patient: true, payer: true, provider: true, practice: true },
+  });
+
+  let freshPayload: Record<string, unknown> | undefined;
+  if (auth) {
+    const link = await db.query.clearinghousePayers.findFirst({
+      where: and(
+        eq(clearinghousePayers.practiceId, practiceId),
+        eq(clearinghousePayers.payerId, auth.payerId)
+      ),
+    });
+    freshPayload = buildPayload(
+      auth,
+      link?.authPolicy?.portalPayerName
+    ) as unknown as Record<string, unknown>;
+  }
+
   const [updated] = await db
     .update(portalSubmissions)
     .set({
       status: "queued",
       needsHumanReason: null,
       lastError: null,
+      ...(freshPayload ? { payload: freshPayload } : {}),
       updatedAt: new Date(),
     })
     .where(
