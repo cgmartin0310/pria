@@ -1,6 +1,6 @@
 {
   "portalKey": "availity_essentials",
-  "name": "Availity Essentials outpatient therapy auth v4 (Carolina Complete flow)",
+  "name": "Availity Essentials outpatient therapy auth v5 (Carolina Complete flow)",
   "activate": true,
   "steps": [
     { "action": "clickByText", "text": "Patient Registration", "note": "Top nav (main document)" },
@@ -58,8 +58,10 @@
     { "action": "click", "selector": "#toDate" },
     { "action": "press", "key": "Control+a" },
     { "action": "typeActive", "binding": "endDate", "transform": "dateMMDDYYYY" },
+    { "action": "press", "key": "Escape", "note": "Close the lingering date-picker popup" },
+    { "action": "select", "selector": "#quantityTypeCode", "value": "VS", "note": "Visits — BEFORE the number: some flows reveal the quantity input only after its type is chosen" },
+    { "action": "wait", "ms": 800 },
     { "action": "type", "selector": "#quantity", "binding": "requestedVisits" },
-    { "action": "select", "selector": "#quantityTypeCode", "value": "VS", "note": "Visits" },
     { "action": "select", "selector": "#serviceLevelCode", "binding": "serviceLevelCode", "note": "E Elective / U Urgent" },
 
     { "action": "click", "selector": "[id=\"s2id_diagnoses.0.code\"]", "note": "Ajax ICD search" },

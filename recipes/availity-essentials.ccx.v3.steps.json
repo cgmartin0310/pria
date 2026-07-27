@@ -252,15 +252,24 @@
   "transform": "dateMMDDYYYY"
  },
  {
-  "action": "type",
-  "selector": "#quantity",
-  "binding": "requestedVisits"
+  "action": "press",
+  "key": "Escape",
+  "note": "Close the lingering date-picker popup"
  },
  {
   "action": "select",
   "selector": "#quantityTypeCode",
   "value": "VS",
-  "note": "Visits"
+  "note": "Visits — BEFORE the number: some flows reveal the quantity input only after its type is chosen"
+ },
+ {
+  "action": "wait",
+  "ms": 800
+ },
+ {
+  "action": "type",
+  "selector": "#quantity",
+  "binding": "requestedVisits"
  },
  {
   "action": "select",
