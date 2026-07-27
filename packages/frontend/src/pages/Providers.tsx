@@ -180,7 +180,11 @@ export default function Providers() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => navigate(`/providers/${p.id}/edit`)}
+                        >
                           Edit
                         </Button>
                       </TableCell>

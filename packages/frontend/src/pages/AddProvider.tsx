@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
@@ -95,10 +95,37 @@ const DISCIPLINE_LABELS: Record<"PT" | "OT" | "ST", string> = {
 
 export default function AddProvider() {
   const navigate = useNavigate();
+  // With an :id route param the same form edits an existing provider.
+  const { id: editId } = useParams<{ id: string }>();
+  const isEdit = !!editId;
   const [form, setForm] = useState<ProviderForm>(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState(isEdit);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // Edit mode: prefill from the existing record
+  useEffect(() => {
+    if (!editId) return;
+    providersApi
+      .get(editId)
+      .then((res) => {
+        const p = res.data;
+        if (!p) return;
+        setForm({
+          firstName: p.firstName ?? "",
+          lastName: p.lastName ?? "",
+          suffix: p.suffix ?? "",
+          credentials: p.credentials ?? "",
+          npi: p.npi ?? "",
+          stateLicenseNumber: p.stateLicenseNumber ?? "",
+          discipline: (p.discipline as ProviderForm["discipline"]) ?? "",
+          taxonomyCode: p.taxonomyCode ?? "",
+        });
+      })
+      .catch(() => {/* stay on empty form; save will fail loudly if id is bad */})
+      .finally(() => setLoadingProvider(false));
+  }, [editId]);
 
   const set = <K extends keyof ProviderForm>(key: K, value: ProviderForm[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -144,7 +171,11 @@ export default function AddProvider() {
       if (form.stateLicenseNumber.trim())
         payload["stateLicenseNumber"] = form.stateLicenseNumber.trim();
 
-      await providersApi.create(payload);
+      if (isEdit && editId) {
+        await providersApi.update(editId, payload);
+      } else {
+        await providersApi.create(payload);
+      }
       navigate("/providers");
     } catch (err) {
       setApiError("Failed to save provider. Please try again.");
@@ -152,6 +183,10 @@ export default function AddProvider() {
       setSaving(false);
     }
   };
+
+  if (loadingProvider) {
+    return <p className="text-sm text-slate-400">Loading provider…</p>;
+  }
 
   return (
     <div className="space-y-6">
@@ -162,7 +197,9 @@ export default function AddProvider() {
           Back
         </Button>
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Add Provider</h2>
+          <h2 className="text-lg font-semibold text-slate-900">
+            {isEdit ? "Edit Provider" : "Add Provider"}
+          </h2>
           <p className="text-sm text-slate-500">Add a therapist or treating provider</p>
         </div>
       </div>
@@ -292,7 +329,7 @@ export default function AddProvider() {
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={saving} className="min-w-32">
-            {saving ? "Saving..." : "Add Provider"}
+            {saving ? "Saving..." : isEdit ? "Save Provider" : "Add Provider"}
           </Button>
         </div>
       </div>
