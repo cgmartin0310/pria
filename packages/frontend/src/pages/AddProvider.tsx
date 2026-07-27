@@ -72,6 +72,7 @@ interface ProviderForm {
   stateLicenseNumber: string;
   discipline: "PT" | "OT" | "ST" | "";
   taxonomyCode: string;
+  isActive: boolean;
 }
 
 const INITIAL_FORM: ProviderForm = {
@@ -83,6 +84,7 @@ const INITIAL_FORM: ProviderForm = {
   stateLicenseNumber: "",
   discipline: "",
   taxonomyCode: "",
+  isActive: true,
 };
 
 const DISCIPLINE_LABELS: Record<"PT" | "OT" | "ST", string> = {
@@ -121,6 +123,7 @@ export default function AddProvider() {
           stateLicenseNumber: p.stateLicenseNumber ?? "",
           discipline: (p.discipline as ProviderForm["discipline"]) ?? "",
           taxonomyCode: p.taxonomyCode ?? "",
+          isActive: p.isActive ?? true,
         });
       })
       .catch(() => {/* stay on empty form; save will fail loudly if id is bad */})
@@ -170,6 +173,7 @@ export default function AddProvider() {
       if (form.credentials.trim()) payload["credentials"] = form.credentials.trim();
       if (form.stateLicenseNumber.trim())
         payload["stateLicenseNumber"] = form.stateLicenseNumber.trim();
+      if (isEdit) payload["isActive"] = form.isActive;
 
       if (isEdit && editId) {
         await providersApi.update(editId, payload);
@@ -322,6 +326,30 @@ export default function AddProvider() {
         </Card>
 
         {apiError && <p className="text-sm text-red-600">{apiError}</p>}
+
+        {/* Status — edit only. Deactivating hides the provider from new-auth
+            pickers; existing auths keep referencing them. */}
+        {isEdit && (
+          <Card>
+            <CardContent className="flex items-center justify-between py-4">
+              <div>
+                <p className="text-sm font-medium text-slate-700">
+                  {form.isActive ? "Active" : "Inactive"}
+                </p>
+                <p className="text-xs text-slate-500">
+                  Inactive providers are hidden from new authorizations but stay
+                  attached to their existing ones.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => set("isActive", !form.isActive)}
+              >
+                {form.isActive ? "Deactivate" : "Reactivate"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-3 pb-8">
