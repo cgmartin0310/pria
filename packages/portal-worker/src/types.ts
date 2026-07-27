@@ -57,6 +57,7 @@ export type RecipeStep =
   | { action: "clickByText"; text?: string; binding?: string; within?: string; note?: string }
   | { action: "clickInRow"; selector: string; text?: string; binding?: string; note?: string }
   | { action: "type"; selector: string; value?: string; binding?: string; transform?: RecipeTransform; note?: string }
+  | { action: "typeIfPresent"; selector: string; value?: string; binding?: string; transform?: RecipeTransform; timeoutMs?: number; note?: string }
   | { action: "typeActive"; value?: string; binding?: string; transform?: RecipeTransform; note?: string }
   | { action: "press"; key: string; note?: string }
   | { action: "wait"; ms: number; note?: string }

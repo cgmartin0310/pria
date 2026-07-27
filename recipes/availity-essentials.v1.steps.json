@@ -84,6 +84,19 @@
   "note": "Masked date input"
  },
  {
+  "action": "typeIfPresent",
+  "selector": "#patient.firstName",
+  "binding": "patient.firstName",
+  "timeoutMs": 4000,
+  "note": "Payer-variant: Carolina Complete asks patient name directly; absent on member-id flows"
+ },
+ {
+  "action": "typeIfPresent",
+  "selector": "#patient.lastName",
+  "binding": "patient.lastName",
+  "timeoutMs": 4000
+ },
+ {
   "action": "select",
   "selector": "#genderCode",
   "binding": "patient.gender",
@@ -170,8 +183,8 @@
  {
   "action": "waitFor",
   "selector": "#search.renderingProviders.serviceProvider.0.npi",
-  "timeoutMs": 20000,
-  "note": "Step 3: Rendering = treating therapist"
+  "timeoutMs": 40000,
+  "note": "Step 3: Rendering = treating therapist (server round-trip between steps can be slow)"
  },
  {
   "action": "select",

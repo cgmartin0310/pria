@@ -264,6 +264,17 @@ async function execSteps(
         case "type":
           await state.target.fill(fixSelector(sub(step.selector)), valueFor(step));
           break;
+        case "typeIfPresent": {
+          const el = await state.target
+            .waitForSelector(fixSelector(sub(step.selector)), {
+              timeout: step.timeoutMs ?? 4_000,
+            })
+            .catch(() => null);
+          if (el) {
+            await state.target.fill(fixSelector(sub(step.selector)), valueFor(step));
+          }
+          break;
+        }
         case "typeActive":
           // Keyboard is page-level; it reaches the focused element in any frame.
           await page.keyboard.type(valueFor(step), { delay: 30 });

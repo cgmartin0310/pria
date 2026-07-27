@@ -94,6 +94,20 @@ export type RecipeStep =
     }
   | {
       /**
+       * Fill the field if it appears within timeoutMs; skip silently if it
+       * doesn't. For payer-variant screens — e.g. Carolina Complete's wizard
+       * asks patient first/last name where Healthy Blue's selects by member id.
+       */
+      action: "typeIfPresent";
+      selector: string;
+      value?: string;
+      binding?: RecipeBinding;
+      transform?: RecipeTransform;
+      timeoutMs?: number;
+      note?: string;
+    }
+  | {
+      /**
        * Type into whatever element currently has focus — for inputs whose ids
        * are generated per-render (Select2 search boxes).
        */

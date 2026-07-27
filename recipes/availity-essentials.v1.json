@@ -1,6 +1,6 @@
 {
   "portalKey": "availity_essentials",
-  "name": "Availity Essentials outpatient therapy auth v1",
+  "name": "Availity Essentials outpatient therapy auth v2",
   "activate": true,
   "steps": [
     { "action": "clickByText", "text": "Patient Registration", "note": "Top nav (main document, before entering the iframe)" },
@@ -21,6 +21,8 @@
     { "action": "click", "selector": "#patient.birthDate" },
     { "action": "press", "key": "Control+a" },
     { "action": "typeActive", "binding": "patient.dob", "transform": "dateMMDDYYYY", "note": "Masked date input" },
+    { "action": "typeIfPresent", "selector": "#patient.firstName", "binding": "patient.firstName", "timeoutMs": 4000, "note": "Payer-variant: Carolina Complete asks patient name directly; absent on member-id flows" },
+    { "action": "typeIfPresent", "selector": "#patient.lastName", "binding": "patient.lastName", "timeoutMs": 4000 },
     { "action": "select", "selector": "#genderCode", "binding": "patient.gender", "note": "Skipped if payload gender empty (portal may prefill from eligibility)" },
     { "action": "select", "selector": "#patient.subscriberRelationshipCode", "binding": "patient.relationshipCode", "note": "X12 values; options are payer-filtered" },
     { "action": "click", "selector": "#authWizardNextButton", "note": "Fires real-time eligibility check" },
@@ -39,7 +41,7 @@
     { "action": "typeActive", "binding": "practice.fax", "transform": "digits", "note": "Optional — payer faxes decision letters here; no-op when practice has no fax" },
     { "action": "click", "selector": "#authWizardNextButton" },
 
-    { "action": "waitFor", "selector": "#search.renderingProviders.serviceProvider.0.npi", "timeoutMs": 20000, "note": "Step 3: Rendering = treating therapist" },
+    { "action": "waitFor", "selector": "#search.renderingProviders.serviceProvider.0.npi", "timeoutMs": 40000, "note": "Step 3: Rendering = treating therapist (server round-trip between steps can be slow)" },
     { "action": "select", "selector": "#serviceTypeCode", "binding": "serviceType.code", "note": "PT/AD/AF — portal codes, payload pre-translates X12 AE->PT" },
     { "action": "select", "selector": "#placeOfServiceCode", "binding": "placeOfService.code", "note": "11 Office / 12 Home" },
     { "action": "type", "selector": "#search.renderingProviders.serviceProvider.0.npi", "binding": "provider.npi", "note": "Provider type defaults to P3 here" },
