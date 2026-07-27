@@ -78,7 +78,27 @@ async function login(
   }
 
   const page = await ctx.newPage();
+  try {
+    return await loginFlow(page, creds);
+  } catch (err) {
+    // Whatever page the worker actually saw is the diagnostic — capture it.
+    return {
+      kind: "needs_human",
+      reason:
+        `Login failed at ${page.url()}: ` +
+        (err instanceof Error ? err.message : String(err)),
+      screenshot: await snap(page),
+    };
+  }
+}
+
+async function loginFlow(
+  page: import("playwright-core").Page,
+  creds: PortalCredentials
+): Promise<PortalOutcome | null> {
   await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+  // The login page is an Angular SPA — give it a real chance to render.
+  await page.waitForSelector(SEL.username, { timeout: 60_000 });
   await page.fill(SEL.username, creds.username);
   await page.fill(SEL.password, creds.password);
   await page.click(SEL.loginButton);
