@@ -530,22 +530,11 @@
   "note": "Evaluation summary can appear after the provider step on this flow"
  },
  {
-  "action": "waitFor",
-  "selector": "button:has-text(\"Add File\")",
-  "timeoutMs": 40000,
-  "note": "CCH Step 4: Attachments — skippable"
- },
- {
-  "action": "click",
-  "selector": "#authWizardNextButton"
- },
- {
   "action": "wait",
-  "ms": 4000,
-  "note": "Let the review page render"
+  "ms": 3000
  },
  {
   "action": "pauseForHuman",
-  "reason": "Filled through the review step — verify the screenshot, then click Submit in the portal yourself (trust policy: the recipe never clicks Submit). Run the field snippet on the confirmation page after submitting."
+  "reason": "All auth data entered — Carolina Complete now requires its InterQual medical-necessity review, which needs clinical answers from a human. Open the in-progress request in Availity, complete the InterQual questions, attachments if any, review, and Submit. Clinical questionnaires stay human by design."
  }
 ]
