@@ -85,7 +85,14 @@ async function findFrame(page: Page, urlIncludes: string, timeoutMs: number): Pr
 async function clickInRow(target: Target, selector: string, text: string): Promise<void> {
   const needle = text.trim().toUpperCase();
   if (!needle) throw new Error("clickInRow: match text resolved to empty");
-  const handles = await target.$$(selector);
+  // Result rows usually arrive from an ajax search (Retrieve Provider Info) —
+  // poll for candidates instead of failing on the not-yet-rendered list.
+  const deadline = Date.now() + 20_000;
+  let handles = await target.$$(selector);
+  while (handles.length === 0 && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 500));
+    handles = await target.$$(selector);
+  }
   if (handles.length === 0) throw new Error(`clickInRow: no elements match ${selector}`);
   for (const handle of handles) {
     const matches = await handle.evaluate(
