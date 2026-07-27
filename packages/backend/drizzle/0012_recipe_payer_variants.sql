@@ -1,0 +1,1 @@
+ALTER TABLE "portal_recipes" ADD COLUMN "payer_id" varchar(26) REFERENCES "payers"("id");

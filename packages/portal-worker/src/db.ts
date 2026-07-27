@@ -47,6 +47,8 @@ export const portalConnections = pgTable("portal_connections", {
 export const portalRecipes = pgTable("portal_recipes", {
   id: varchar("id", { length: 26 }).primaryKey(),
   portalKey: varchar("portal_key", { length: 50 }).notNull(),
+  /** Payer variant; null = the portal's generic recipe. */
+  payerId: varchar("payer_id", { length: 26 }),
   steps: jsonb("steps").notNull(),
   isActive: boolean("is_active").notNull().default(false),
 });
@@ -55,6 +57,7 @@ export const portalRecipes = pgTable("portal_recipes", {
 // on the authorization itself, not just the portal_submissions row.
 export const authorizations = pgTable("authorizations", {
   id: varchar("id", { length: 26 }).primaryKey(),
+  payerId: varchar("payer_id", { length: 26 }),
   status: varchar("status", { length: 20 }).notNull(),
   authNumber: varchar("auth_number", { length: 100 }),
   submittedAt: timestamp("submitted_at"),
@@ -80,5 +83,5 @@ const { Pool } = pg;
 const pool = new Pool({ connectionString: config.databaseUrl, max: 5 });
 
 export const db = drizzle(pool, {
-  schema: { portalSubmissions, portalConnections, portalRecipes },
+  schema: { portalSubmissions, portalConnections, portalRecipes, authorizations },
 });

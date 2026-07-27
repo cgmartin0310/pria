@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input.js";
 import { useAuth } from "@/hooks/useAuth.js";
 import {
   portalApi,
+  payersApi,
   type PortalConnection,
   type PortalRecipeSummary,
 } from "@/lib/api.js";
@@ -234,6 +235,8 @@ function ConnectForm({
  */
 function RecipeManager() {
   const [recipes, setRecipes] = useState<PortalRecipeSummary[]>([]);
+  const [payers, setPayers] = useState<{ id: string; name: string }[]>([]);
+  const [payerId, setPayerId] = useState("");
   const [name, setName] = useState("");
   const [stepsJson, setStepsJson] = useState("");
   const [activate, setActivate] = useState(true);
@@ -249,6 +252,13 @@ function RecipeManager() {
   }, []);
 
   useEffect(() => load(), [load]);
+
+  useEffect(() => {
+    payersApi
+      .list()
+      .then((res) => setPayers((res.data ?? []).map((p) => ({ id: p.id, name: p.name }))))
+      .catch(() => setPayers([]));
+  }, []);
 
   const handleSave = async () => {
     setError(null);
@@ -287,6 +297,7 @@ function RecipeManager() {
     try {
       await portalApi.createRecipe({
         portalKey: pastedPortalKey ?? "availity_essentials",
+        payerId: payerId || undefined,
         name: name.trim() || pastedName || "Availity Essentials auth",
         steps,
         activate,
@@ -364,6 +375,24 @@ function RecipeManager() {
         )}
 
         <div className="space-y-3 border-t border-slate-100 pt-4">
+          <div>
+            <label className="mb-1 block text-xs text-slate-500">
+              Applies to payer (blank = generic recipe for the whole portal;
+              payer-specific recipes win over generic)
+            </label>
+            <select
+              className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              value={payerId}
+              onChange={(e) => setPayerId(e.target.value)}
+            >
+              <option value="">All payers (portal generic)</option>
+              {payers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <Input
             placeholder="Recipe name (e.g. Availity auth form v1)"
             value={name}

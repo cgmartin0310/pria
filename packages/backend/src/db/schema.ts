@@ -792,10 +792,16 @@ export const portalRecipes = pgTable(
       .primaryKey()
       .$defaultFn(() => createId()),
     portalKey: varchar("portal_key", { length: 50 }).notNull(),
+    /**
+     * Optional payer variant: wizard flows differ per payer within one portal
+     * (Healthy Blue 6-step vs Carolina Complete 5-step). Null = the portal's
+     * generic recipe; the worker resolves payer-specific first, then generic.
+     */
+    payerId: varchar("payer_id", { length: 26 }).references(() => payers.id),
     name: varchar("name", { length: 255 }).notNull(),
     version: integer("version").notNull().default(1),
     steps: jsonb("steps").notNull().$type<unknown[]>().default([]),
-    /** Only one active recipe per portalKey is used by the worker. */
+    /** Only one active recipe per (portalKey, payerId) scope. */
     isActive: boolean("is_active").notNull().default(false),
     createdBy: varchar("created_by", { length: 255 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),

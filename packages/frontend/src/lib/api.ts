@@ -318,6 +318,7 @@ export const portalApi = {
   recipes: () => api.get<ApiResponse<PortalRecipeSummary[]>>("/portals/recipes"),
   createRecipe: (data: {
     portalKey: string;
+    payerId?: string;
     name: string;
     steps: unknown[];
     activate?: boolean;

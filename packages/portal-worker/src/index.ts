@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { config } from "./config.js";
 import {
   db,
@@ -55,12 +55,30 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
     });
     if (!conn?.encryptedCredentials) throw new Error("Portal connection/credentials missing");
 
-    const recipe = await db.query.portalRecipes.findFirst({
-      where: and(
-        eq(portalRecipes.portalKey, conn.portalKey),
-        eq(portalRecipes.isActive, true)
-      ),
+    // Resolve the recipe payer-specific first (wizard flows differ per payer
+    // within one portal), then fall back to the portal's generic recipe.
+    const auth = await db.query.authorizations.findFirst({
+      where: eq(authorizations.id, sub.authorizationId),
+      columns: { id: true, payerId: true, status: true, authNumber: true, submittedAt: true, updatedAt: true },
     });
+    let recipe = auth?.payerId
+      ? await db.query.portalRecipes.findFirst({
+          where: and(
+            eq(portalRecipes.portalKey, conn.portalKey),
+            eq(portalRecipes.payerId, auth.payerId),
+            eq(portalRecipes.isActive, true)
+          ),
+        })
+      : undefined;
+    if (!recipe) {
+      recipe = await db.query.portalRecipes.findFirst({
+        where: and(
+          eq(portalRecipes.portalKey, conn.portalKey),
+          isNull(portalRecipes.payerId),
+          eq(portalRecipes.isActive, true)
+        ),
+      });
+    }
     if (!recipe) {
       await setStatus(portalSubmissionId, {
         status: "needs_human",
