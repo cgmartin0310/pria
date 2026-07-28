@@ -641,6 +641,8 @@ export const clearinghousePayers = pgTable(
        * carelon_mbm recipe exists) — the ladder stops at "submit manually".
        */
       portalKey?: "availity_essentials" | "carelon_mbm" | "manual";
+      /** api | edi_sftp | portal | manual — unset = decide from capability. */
+      transport?: "api" | "edi_sftp" | "portal" | "manual";
       notes?: string;
     }>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),

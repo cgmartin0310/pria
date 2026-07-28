@@ -12,7 +12,7 @@ import * as availity from "../services/availity.service.js";
 import { toServiceReview } from "../services/availity-mapper.service.js";
 import type { PASubmitJobData } from "../types/index.js";
 
-const { authorizations, authorizationHistory } = schema;
+const { authorizations, authorizationHistory, clearinghousePayers } = schema;
 
 export const paSubmitWorker = new Worker<PASubmitJobData>(
   "pa-submit",
@@ -97,6 +97,16 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
     // ── Route to the practice's connected clearinghouse ───────────────────
     const routing = await getRoutingForPayer(practiceId, auth.payerId);
 
+    // An explicit per-payer transport (set on the Payers page) overrides
+    // capability guessing: portal/manual skip the API rung entirely.
+    const payerLink = await db.query.clearinghousePayers.findFirst({
+      where: and(
+        eq(clearinghousePayers.practiceId, practiceId),
+        eq(clearinghousePayers.payerId, auth.payerId)
+      ),
+    });
+    const transport = payerLink?.authPolicy?.transport;
+
     /**
      * Transport ladder: API route → portal agent → manual. The user just
      * clicks Submit — when a payer has no API route, we automatically queue it
@@ -142,6 +152,20 @@ export const paSubmitWorker = new Worker<PASubmitJobData>(
         });
       }
     };
+
+    if (transport === "manual") {
+      await routeToPortalOrManual(
+        `${auth.payer.name} is set to manual filing on the Payers page`
+      );
+      return;
+    }
+
+    if (transport === "portal") {
+      await routeToPortalOrManual(
+        `${auth.payer.name} files through its payer portal (set on the Payers page)`
+      );
+      return;
+    }
 
     if (!routing) {
       await routeToPortalOrManual(

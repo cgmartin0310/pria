@@ -235,6 +235,7 @@ function ConnectForm({
  */
 function RecipeManager() {
   const [recipes, setRecipes] = useState<PortalRecipeSummary[]>([]);
+  const [showAll, setShowAll] = useState(false);
   const [payers, setPayers] = useState<{ id: string; name: string }[]>([]);
   const [payerId, setPayerId] = useState("");
   const [name, setName] = useState("");

@@ -246,6 +246,12 @@ export interface PayerAuthPolicy {
    * availity_essentials. "manual" = no automated path (route to manual work).
    */
   portalKey?: "availity_essentials" | "carelon_mbm" | "manual";
+  /**
+   * How this payer's auths are filed. "api" = clearinghouse real-time 278,
+   * "edi_sftp" = batch X12 mailbox, "portal" = agent + recipe, "manual" =
+   * human only. Unset means Pria decides from clearinghouse capability.
+   */
+  transport?: "api" | "edi_sftp" | "portal" | "manual";
   notes?: string;
 }
 

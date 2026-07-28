@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
   { label: "Providers", to: "/providers", icon: Stethoscope },
   { label: "Authorizations", to: "/authorizations", icon: FileText },
   { label: "New Authorization", to: "/authorizations/new", icon: PlusCircle },
+  { label: "Payers", to: "/payers", icon: Building2 },
   { label: "Portal Queue", to: "/portal-queue", icon: Bot },
   { label: "Settings", to: "/settings", icon: Settings },
 ];

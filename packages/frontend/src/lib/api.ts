@@ -374,6 +374,7 @@ export interface PortalSubmissionDetail extends PortalSubmission {
 export interface PortalRecipeSummary {
   id: string;
   portalKey: string;
+  payerId: string | null;
   name: string;
   version: number;
   stepCount: number;

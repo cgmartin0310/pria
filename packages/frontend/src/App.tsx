@@ -14,6 +14,7 @@ import Patients from "@/pages/Patients.js";
 import AddPatient from "@/pages/AddPatient.js";
 import Providers from "@/pages/Providers.js";
 import AddProvider from "@/pages/AddProvider.js";
+import Payers from "@/pages/Payers.js";
 import Settings from "@/pages/Settings.js";
 import PortalQueue from "@/pages/PortalQueue.js";
 import SignInPage from "@/pages/SignInPage.js";
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="/providers" element={<Providers />} />
             <Route path="/providers/new" element={<AddProvider />} />
             <Route path="/providers/:id/edit" element={<AddProvider />} />
+            <Route path="/payers" element={<Payers />} />
             <Route path="/portal-queue" element={<PortalQueue />} />
             <Route path="/settings" element={<Settings />} />
           </Route>

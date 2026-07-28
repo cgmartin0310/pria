@@ -11,6 +11,7 @@ const authPolicySchema = z.object({
   maxVisitsPerAuth: z.number().int().min(1).max(999).optional(),
   portalPayerName: z.string().max(255).optional(),
   portalKey: z.enum(["availity_essentials", "carelon_mbm", "manual"]).optional(),
+  transport: z.enum(["api", "edi_sftp", "portal", "manual"]).optional(),
   notes: z.string().max(500).optional(),
 });
 
