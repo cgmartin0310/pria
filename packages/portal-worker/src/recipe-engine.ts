@@ -140,12 +140,14 @@ async function selectWithFallback(target: Target, selector: string, value: strin
   if (!value) throw new Error("select: value resolved to empty");
   try {
     await target.selectOption(selector, value, { force: true });
+    await verifySelected(target, selector, value);
     return;
   } catch {
     /* fall through to label matching */
   }
   try {
     await target.selectOption(selector, { label: value }, { force: true });
+    await verifySelected(target, selector, value);
     return;
   } catch {
     /* fall through to normalized matching */
@@ -169,6 +171,25 @@ async function selectWithFallback(target: Target, selector: string, value: strin
   }, value);
   if (!matched) {
     throw new Error(`select: no option matching "${value}" in ${selector}`);
+  }
+  await verifySelected(target, selector, value);
+}
+
+/**
+ * Read the value back. Some portals render a widget over the real <select>
+ * and validate the WIDGET — setting the underlying element then looks like it
+ * worked while the form still sees an empty field. Failing here turns that
+ * silent no-op into a pause with a screenshot.
+ */
+async function verifySelected(target: Target, selector: string, wanted: string): Promise<void> {
+  const el = await target.$(selector);
+  if (!el) return;
+  const current = await el.evaluate((node) => (node as HTMLSelectElement).value ?? "");
+  if (!current) {
+    throw new Error(
+      `select: "${wanted}" didn't take on ${selector} (the visible control may ` +
+        `be a widget that ignores the underlying select)`
+    );
   }
 }
 
