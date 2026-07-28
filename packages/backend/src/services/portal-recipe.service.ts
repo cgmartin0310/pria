@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import type { RecipeStep } from "./portal-recipe.types.js";
 import { PortalError } from "./portal.service.js";
@@ -11,19 +11,20 @@ const { portalRecipes } = schema;
  */
 export async function createRecipe(input: {
   portalKey: string;
-  /** Optional payer variant — null scopes the recipe as the portal generic. */
-  payerId?: string | null;
+  /** Recipes are per payer — wizard flows differ materially between them. */
+  payerId: string;
   name: string;
   steps: RecipeStep[];
   activate?: boolean;
   createdBy?: string;
 }) {
+  if (!input.payerId) {
+    throw new PortalError(400, "A recipe must be attached to a payer");
+  }
   // Versioning and single-active are scoped to (portalKey, payerId).
   const scope = and(
     eq(portalRecipes.portalKey, input.portalKey),
-    input.payerId
-      ? eq(portalRecipes.payerId, input.payerId)
-      : isNull(portalRecipes.payerId)
+    eq(portalRecipes.payerId, input.payerId)
   );
 
   const [{ maxVersion } = { maxVersion: 0 }] = await db
@@ -44,7 +45,7 @@ export async function createRecipe(input: {
     .insert(portalRecipes)
     .values({
       portalKey: input.portalKey,
-      payerId: input.payerId ?? null,
+      payerId: input.payerId,
       name: input.name,
       version,
       steps: input.steps as unknown[],
@@ -76,24 +77,15 @@ export async function listRecipes(portalKey?: string) {
 }
 
 /**
- * The recipe the worker should replay: the payer-specific active variant
- * when one exists, otherwise the portal's generic active recipe.
+ * The recipe the worker replays for a payer. No generic fallback by design:
+ * an unmapped payer must stop for a human rather than be filed with another
+ * payer's wizard flow.
  */
-export async function getActiveRecipe(portalKey: string, payerId?: string | null) {
-  if (payerId) {
-    const specific = await db.query.portalRecipes.findFirst({
-      where: and(
-        eq(portalRecipes.portalKey, portalKey),
-        eq(portalRecipes.payerId, payerId),
-        eq(portalRecipes.isActive, true)
-      ),
-    });
-    if (specific) return specific;
-  }
+export async function getActiveRecipe(portalKey: string, payerId: string) {
   return db.query.portalRecipes.findFirst({
     where: and(
       eq(portalRecipes.portalKey, portalKey),
-      isNull(portalRecipes.payerId),
+      eq(portalRecipes.payerId, payerId),
       eq(portalRecipes.isActive, true)
     ),
   });
@@ -111,9 +103,7 @@ export async function activateRecipe(id: string) {
     .where(
       and(
         eq(portalRecipes.portalKey, recipe.portalKey),
-        recipe.payerId
-          ? eq(portalRecipes.payerId, recipe.payerId)
-          : isNull(portalRecipes.payerId)
+        eq(portalRecipes.payerId, recipe.payerId ?? "")
       )
     );
 

@@ -169,8 +169,8 @@ export async function portalRoutes(app: FastifyInstance) {
 
   const recipeSchema = z.object({
     portalKey: z.string().min(1).max(50),
-    /** Optional payer variant (payers.id); omit for the portal generic. */
-    payerId: z.string().max(26).optional(),
+    /** Recipes are per payer — flows differ materially between them. */
+    payerId: z.string().min(1).max(26),
     name: z.string().min(1).max(255),
     steps: z.array(stepSchema).min(1).max(200),
     activate: z.boolean().optional(),
@@ -217,7 +217,7 @@ export async function portalRoutes(app: FastifyInstance) {
       try {
         const row = await recipeService.createRecipe({
           portalKey: parsed.data.portalKey,
-          payerId: parsed.data.payerId ?? null,
+          payerId: parsed.data.payerId,
           name: parsed.data.name,
           steps: parsed.data.steps as RecipeStep[],
           activate: parsed.data.activate,

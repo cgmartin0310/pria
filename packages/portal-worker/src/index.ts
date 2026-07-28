@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -65,7 +65,10 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
       where: eq(authorizations.id, sub.authorizationId),
       columns: { id: true, payerId: true, status: true, authNumber: true, submittedAt: true, updatedAt: true },
     });
-    let recipe = auth?.payerId
+    // Recipes are PER PAYER: wizard flows differ materially between payers on
+    // the same portal, so there is deliberately no generic fallback — filing a
+    // payer with another payer's flow would fail in ways nobody checked.
+    const recipe = auth?.payerId
       ? await db.query.portalRecipes.findFirst({
           where: and(
             eq(portalRecipes.portalKey, conn.portalKey),
@@ -75,18 +78,11 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
         })
       : undefined;
     if (!recipe) {
-      recipe = await db.query.portalRecipes.findFirst({
-        where: and(
-          eq(portalRecipes.portalKey, conn.portalKey),
-          isNull(portalRecipes.payerId),
-          eq(portalRecipes.isActive, true)
-        ),
-      });
-    }
-    if (!recipe) {
       await setStatus(portalSubmissionId, {
         status: "needs_human",
-        needsHumanReason: `No active recipe for ${conn.portalKey} — record one first`,
+        needsHumanReason:
+          `No recipe for this payer on ${conn.portalKey} yet — file this one by ` +
+          `hand, and add the payer's recipe on the Payers page to automate it.`,
       });
       return;
     }
