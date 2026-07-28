@@ -574,10 +574,30 @@
   "list": "documentPaths",
   "steps": [
    {
-    "action": "select",
-    "selector": "select >> nth={i}",
-    "binding": "documentTypes.{i}",
-    "note": "Attachment type per file \u2014 the dropdowns are anonymous, so they're addressed in upload order (08 Plan of Treatment, 06 Initial Assessment)"
+    "action": "click",
+    "selector": ".select2-container.reportTypeCode >> nth={i}",
+    "note": "Open the attachment Type widget for this file (hidden select carries class reportTypeCode)"
+   },
+   {
+    "action": "wait",
+    "ms": 700
+   },
+   {
+    "action": "typeActive",
+    "binding": "documentTypeLabels.{i}",
+    "note": "Type into the widget's search box \u2014 same pattern as the diagnosis/CPT pickers"
+   },
+   {
+    "action": "wait",
+    "ms": 900
+   },
+   {
+    "action": "press",
+    "key": "Enter"
+   },
+   {
+    "action": "wait",
+    "ms": 600
    }
   ]
  },

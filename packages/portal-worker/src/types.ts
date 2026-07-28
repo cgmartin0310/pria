@@ -51,6 +51,8 @@ export interface PortalSubmissionPayload {
   documentPaths?: string[];
   /** Portal attachment-type codes, parallel to documentPaths (X12 PWK01). */
   documentTypes?: string[];
+  /** Human labels for those codes — Select2 widgets are driven by text. */
+  documentTypeLabels?: string[];
   requestedVisits?: number;
   startDate?: string;
   endDate?: string;

@@ -111,9 +111,20 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
     const docs = await db.query.authorizationDocuments.findMany({
       where: eq(authorizationDocuments.authorizationId, sub.authorizationId),
     });
+    // PWK01 code → the option text portals show. Select2-style controls are
+    // driven by typing the label, not by setting the hidden <select>.
+    const DOC_TYPE_LABELS: Record<string, string> = {
+      "08": "Plan of Treatment",
+      "06": "Initial Assessment",
+      "09": "Progress Report",
+      B3: "Physician Order",
+      M1: "Medical Record Attachment",
+    };
+
     let docDir: string | null = null;
     const documentPaths: string[] = [];
     const documentTypes: string[] = [];
+    const documentTypeLabels: string[] = [];
     for (const doc of docs) {
       if (!doc.fileData || !doc.fileName) continue;
       docDir = docDir ?? (await mkdtemp(join(tmpdir(), "pria-docs-")));
@@ -124,13 +135,16 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
       // before typing existed stored the FILENAME there — anything that isn't
       // a 1-2 character code falls back to M1 (Medical Record Attachment).
       const code = (doc.content ?? "").trim();
-      documentTypes.push(/^[A-Za-z0-9]{1,2}$/.test(code) ? code.toUpperCase() : "M1");
+      const typeCode = /^[A-Za-z0-9]{1,2}$/.test(code) ? code.toUpperCase() : "M1";
+      documentTypes.push(typeCode);
+      documentTypeLabels.push(DOC_TYPE_LABELS[typeCode] ?? "Medical Record Attachment");
     }
 
     const payload = {
       ...(sub.payload as PortalSubmissionPayload),
       documentPaths,
       documentTypes,
+      documentTypeLabels,
     };
 
     const outcome = await adapter({
