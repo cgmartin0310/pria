@@ -200,6 +200,29 @@ export async function authorizationRoutes(app: FastifyInstance) {
     }
   );
 
+  // Remove every attachment on an auth (re-attach fresh, e.g. to fix types).
+  app.delete("/authorizations/:id/documents", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const auth = await db.query.authorizations.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(schema.authorizations.id, id),
+        eq(schema.authorizations.practiceId, req.auth.practiceId)
+      ),
+    });
+    if (!auth) {
+      return reply.status(404).send({
+        error: "NOT_FOUND",
+        message: "Authorization not found",
+        statusCode: 404,
+      });
+    }
+    await db
+      .delete(schema.authorizationDocuments)
+      .where(eq(schema.authorizationDocuments.authorizationId, id));
+    return reply.send({ data: { cleared: true } });
+  });
+
   app.get("/authorizations/:id/documents", async (req, reply) => {
     const { id } = req.params as { id: string };
     const auth = await db.query.authorizations.findFirst({

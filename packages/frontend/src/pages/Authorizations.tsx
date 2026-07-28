@@ -292,6 +292,21 @@ export default function Authorizations() {
 
   // Submission is queued and processed by a worker, so reload once immediately
   // and again shortly after to pick up the resulting decision.
+  const handleClearDocs = async (authId: string) => {
+    if (!window.confirm("Remove all attachments from this authorization?")) return;
+    setAttaching(authId);
+    try {
+      await authDocsApi.clear(authId);
+      load();
+    } catch (e) {
+      setSubmitError(
+        (e as { message?: string })?.message ?? "Couldn't clear attachments"
+      );
+    } finally {
+      setAttaching(null);
+    }
+  };
+
   const handleSubmit = async (id: string) => {
     setSubmitting(id);
     setSubmitError(null);
@@ -470,6 +485,17 @@ export default function Authorizations() {
                               ? `${auth.documentCount} attached`
                               : "Attach doc"}
                         </Button>
+                        {auth.documentCount > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Remove all attachments"
+                            onClick={() => handleClearDocs(auth.id)}
+                            disabled={attaching === auth.id}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                         {auth.status === "draft" && (
                           <Button
                             variant="outline"

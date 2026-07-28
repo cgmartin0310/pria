@@ -120,9 +120,11 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
       const filePath = join(docDir, doc.fileName.replace(/[^\w.\-]/g, "_"));
       await writeFile(filePath, Buffer.from(doc.fileData, "base64"));
       documentPaths.push(filePath);
-      // `content` holds the portal attachment-type code; M1 (Medical Record
-      // Attachment) is the safe generic when a document predates typing.
-      documentTypes.push(doc.content || "M1");
+      // `content` holds the portal attachment-type code. Documents uploaded
+      // before typing existed stored the FILENAME there — anything that isn't
+      // a 1-2 character code falls back to M1 (Medical Record Attachment).
+      const code = (doc.content ?? "").trim();
+      documentTypes.push(/^[A-Za-z0-9]{1,2}$/.test(code) ? code.toUpperCase() : "M1");
     }
 
     const payload = {

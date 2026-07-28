@@ -145,6 +145,10 @@ export const authDocsApi = {
     api.get<ApiResponse<{ id: string; fileName: string }[]>>(
       `/authorizations/${authId}/documents`
     ),
+  clear: (authId: string) =>
+    api.delete<ApiResponse<{ cleared: boolean }>>(
+      `/authorizations/${authId}/documents`
+    ),
 };
 
 export const payersApi = {
