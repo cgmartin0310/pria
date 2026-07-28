@@ -493,17 +493,24 @@ export async function getDashboardStats(practiceId: string) {
             gte(authorizations.decidedAt, startOfMonth)
           )
         ),
-      db
-        .select({ count: sql<number>`count(*)` })
-        .from(authorizations)
-        .where(
-          and(
-            eq(authorizations.practiceId, practiceId),
-            eq(authorizations.status, "approved"),
-            gte(authorizations.expiresAt, now),
-            lt(authorizations.expiresAt, twoWeeksFromNow)
-          )
+      // Expiring = approved auths whose window closes within 45 days. The
+      // payer's certified end date (expires_at) is only set when a 278
+      // RESPONSE comes back; portal filings never take that path, so fall back
+      // to the requested end date the practice entered.
+      db.query.authorizations.findMany({
+        columns: { id: true, endDate: true, expiresAt: true, approvedVisits: true },
+        with: { patient: true, payer: true },
+        where: and(
+          eq(authorizations.practiceId, practiceId),
+          eq(authorizations.status, "approved"),
+          sql`coalesce(${authorizations.expiresAt}::date, ${authorizations.endDate}::date)
+                between current_date and current_date + interval '45 days'`
         ),
+        orderBy: [
+          sql`coalesce(${authorizations.expiresAt}::date, ${authorizations.endDate}::date) asc`,
+        ],
+        limit: 20,
+      }),
       // Average days from submission to decision, over auths that have both dates.
       db
         .select({
@@ -533,7 +540,14 @@ export async function getDashboardStats(practiceId: string) {
     pendingCount,
     approvedThisMonth: approvedCount,
     deniedThisMonth: deniedCount,
-    expiringSoon: Number(expiringSoon[0]?.count ?? 0),
+    expiringSoon: expiringSoon.length,
+    expiring: expiringSoon.map((a) => ({
+      id: a.id,
+      patientName: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : "",
+      payerName: a.payer?.name ?? "",
+      endDate: (a.expiresAt ? String(a.expiresAt).slice(0, 10) : a.endDate) ?? null,
+      approvedVisits: a.approvedVisits ?? null,
+    })),
     approvalRate: total > 0 ? Math.round((approvedCount / total) * 100) : 0,
     avgDecisionDays,
   };

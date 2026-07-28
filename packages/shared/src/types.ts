@@ -640,7 +640,15 @@ export interface DashboardStats {
   pendingCount: number;
   approvedThisMonth: number;
   deniedThisMonth: number;
-  expiringSoon: number; // within 14 days or 5 visits remaining
+  expiringSoon: number; // approved auths whose window closes within 45 days
+  /** Those auths, soonest first — the dashboard lists them for renewal. */
+  expiring?: {
+    id: string;
+    patientName: string;
+    payerName: string;
+    endDate: string | null;
+    approvedVisits: number | null;
+  }[];
   approvalRate: number; // percentage
   avgDecisionDays: number;
 }

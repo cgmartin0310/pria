@@ -144,23 +144,54 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="py-8 text-center text-sm text-slate-400">
-              {stats.expiringSoon > 0 ? (
-                <div className="px-6">
-                  <p className="font-medium text-orange-600 text-base">
-                    {stats.expiringSoon} auth{stats.expiringSoon !== 1 ? "s" : ""} expiring soon
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Within 14 days or 5 visits remaining
-                  </p>
-                </div>
-              ) : (
-                "No authorizations expiring soon."
-              )}
-            </div>
+            {stats.expiring && stats.expiring.length > 0 ? (
+              <ul className="divide-y divide-slate-100">
+                {stats.expiring.map((a) => {
+                  const days = a.endDate
+                    ? Math.ceil(
+                        (new Date(`${a.endDate}T00:00:00`).getTime() - Date.now()) /
+                          86_400_000
+                      )
+                    : null;
+                  return (
+                    <li
+                      key={a.id}
+                      className="flex items-center justify-between gap-3 px-4 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-800">
+                          {a.patientName}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {a.payerName}
+                          {a.endDate ? ` · ends ${a.endDate}` : ""}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                          days !== null && days <= 14
+                            ? "bg-red-50 text-red-700"
+                            : "bg-orange-50 text-orange-700"
+                        }`}
+                      >
+                        {days !== null ? `${days}d` : "—"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="py-8 text-center text-sm text-slate-400">
+                No authorizations expiring in the next 45 days.
+              </div>
+            )}
             <div className="border-t border-slate-100 p-4">
               <Button variant="outline" size="sm" className="w-full" asChild>
-                <Link to="/authorizations/new">Start Renewal Requests</Link>
+                <Link to="/authorizations?status=approved">
+                  {stats.expiringSoon > 0
+                    ? `Review ${stats.expiringSoon} for renewal`
+                    : "View approved auths"}
+                </Link>
               </Button>
             </div>
           </CardContent>
