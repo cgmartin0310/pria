@@ -327,6 +327,11 @@ export const portalApi = {
     api.get<ApiResponse<PortalSubmissionDetail>>(`/portals/submissions/${id}`),
   retrySubmission: (id: string) =>
     api.post<ApiResponse<PortalSubmission>>(`/portals/submissions/${id}/retry`),
+  completeSubmission: (id: string, confirmationNumber?: string) =>
+    api.post<ApiResponse<PortalSubmission>>(
+      `/portals/submissions/${id}/complete`,
+      confirmationNumber ? { confirmationNumber } : undefined
+    ),
   recipes: () => api.get<ApiResponse<PortalRecipeSummary[]>>("/portals/recipes"),
   createRecipe: (data: {
     portalKey: string;
@@ -359,6 +364,8 @@ export interface PortalSubmission {
   attempts: number;
   lastError: string | null;
   needsHumanReason: string | null;
+  takeoverSessionId?: string | null;
+  takeoverUrl?: string | null;
   claimedBy: string | null;
   startedAt: string | null;
   completedAt: string | null;

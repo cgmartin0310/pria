@@ -23,6 +23,18 @@ export const config = {
   browserWsEndpoint: process.env["BROWSER_WS_ENDPOINT"] ?? "",
   /** How many auths one worker process handles at once (≈ browser tabs). */
   concurrency: parseInt(process.env["WORKER_CONCURRENCY"] ?? "1", 10),
+  /**
+   * Steel (hosted browsers). When set, each run gets its own Steel session so
+   * a PAUSED run can be handed to a human via Steel's live view instead of
+   * being thrown away. Unset = local Chromium, no takeover.
+   *
+   * PHI renders in Steel's browsers — a BAA with Steel is required before real
+   * patient data goes through it.
+   */
+  steelApiKey: process.env["STEEL_API_KEY"] ?? "",
+  steelBaseUrl: process.env["STEEL_BASE_URL"] ?? "https://api.steel.dev",
+  /** Minutes a paused session stays alive for takeover before Steel reaps it. */
+  steelSessionTtlMinutes: parseInt(process.env["STEEL_SESSION_TTL_MIN"] ?? "45", 10),
   /** Identifies this worker in portal_submissions.claimed_by. */
   workerId: process.env["WORKER_ID"] ?? `worker-${process.pid}`,
 } as const;

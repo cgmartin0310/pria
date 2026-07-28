@@ -41,6 +41,12 @@ services:
       #   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
       - key: CREDENTIAL_ENCRYPTION_KEY
         sync: false
+      # Steel hosted browsers — set to enable human takeover of paused runs.
+      # PHI renders in these browsers: only set once a BAA with Steel exists.
+      - key: STEEL_API_KEY
+        sync: false
+      - key: STEEL_SESSION_TTL_MIN
+        value: "45"
       # Comma-separated emails allowed to manage platform-wide portal recipes.
       - key: PLATFORM_ADMIN_EMAILS
         sync: false

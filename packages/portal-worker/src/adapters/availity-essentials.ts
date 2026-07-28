@@ -2,6 +2,7 @@ import { chromium, type Browser, type BrowserContext, type Frame, type Page } fr
 import { config } from "../config.js";
 import { totp, totpSecondsRemaining } from "../totp.js";
 import { runRecipe, snap } from "../recipe-engine.js";
+import { steelEnabled, createSession, releaseSession, type SteelSession } from "../steel.js";
 import type {
   PortalCredentials,
   PortalOutcome,
@@ -41,7 +42,11 @@ const SEL = {
   mfaSubmit: 'button[type="submit"]',
 };
 
-async function connectBrowser(): Promise<Browser> {
+async function connectBrowser(steel?: SteelSession): Promise<Browser> {
+  if (steel) {
+    // Hosted browser — the session outlives this connection if we park it.
+    return chromium.connectOverCDP(steel.websocketUrl);
+  }
   if (config.browserWsEndpoint) {
     // Remote Chromium (hosted browser / separate VM) over CDP — e.g. Steel.
     return chromium.connectOverCDP(config.browserWsEndpoint);
@@ -203,7 +208,23 @@ async function loginFlow(
  * session, then replay the recipe to file the auth.
  */
 export async function submit(input: SubmitInput): Promise<PortalOutcome> {
-  const browser = await connectBrowser();
+  // A Steel session lets a PAUSED run be handed to a human mid-auth instead of
+  // being discarded. Falling back to a local browser keeps runs working when
+  // Steel is unconfigured or unreachable.
+  let steel: SteelSession | undefined;
+  if (steelEnabled()) {
+    try {
+      steel = await createSession();
+    } catch (err) {
+      console.warn(
+        "[steel] session create failed, using local browser:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  const browser = await connectBrowser(steel);
+  let park = false;
   try {
     const ctx = await browser.newContext(
       input.sessionState ? { storageState: JSON.parse(input.sessionState) } : {}
@@ -211,7 +232,7 @@ export async function submit(input: SubmitInput): Promise<PortalOutcome> {
 
     if (!(await isLoggedIn(ctx))) {
       const loginResult = await login(ctx, input.credentials);
-      if (loginResult) return loginResult; // needs_mfa / needs_human
+      if (loginResult) return attachTakeover(loginResult, steel, (p) => (park = p));
       // Persist the fresh session so future jobs skip login (and MFA).
       await input.onSession(JSON.stringify(await ctx.storageState()));
     }
@@ -223,11 +244,15 @@ export async function submit(input: SubmitInput): Promise<PortalOutcome> {
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
     const shellReady = await frameWithSelector(page, [SEL.loggedInMarker], 30_000);
     if (!shellReady) {
-      return {
-        kind: "needs_human",
-        reason: `Authenticated dashboard did not render at ${page.url()}`,
-        screenshot: await snap(page),
-      };
+      return attachTakeover(
+        {
+          kind: "needs_human",
+          reason: `Authenticated dashboard did not render at ${page.url()}`,
+          screenshot: await snap(page),
+        },
+        steel,
+        (p) => (park = p)
+      );
     }
     const outcome = await runRecipe(
       page,
@@ -240,10 +265,38 @@ export async function submit(input: SubmitInput): Promise<PortalOutcome> {
     if (outcome.kind === "submitted") {
       await input.onSession(JSON.stringify(await ctx.storageState()));
     }
-    return outcome;
+    return attachTakeover(outcome, steel, (p) => (park = p));
   } catch (err) {
     return { kind: "failed", error: err instanceof Error ? err.message : String(err) };
   } finally {
-    await browser.close();
+    if (park && steel) {
+      // Leave the hosted browser running so a human can finish in it; Steel
+      // reaps it at the session timeout if nobody does.
+      console.log(`[steel] parking session ${steel.id} for human takeover`);
+      await browser.close().catch(() => {});
+    } else {
+      await browser.close().catch(() => {});
+      if (steel) await releaseSession(steel.id);
+    }
   }
+}
+
+/**
+ * A paused run on a hosted browser becomes a takeover offer: the session stays
+ * up and the outcome carries its live-view URL. Anything terminal releases it.
+ */
+function attachTakeover(
+  outcome: PortalOutcome,
+  steel: SteelSession | undefined,
+  setPark: (v: boolean) => void
+): PortalOutcome {
+  if (!steel) return outcome;
+  if (outcome.kind === "needs_human" || outcome.kind === "needs_mfa") {
+    setPark(true);
+    return {
+      ...outcome,
+      takeover: { sessionId: steel.id, liveViewUrl: steel.liveViewUrl },
+    };
+  }
+  return outcome;
 }

@@ -72,9 +72,15 @@ export type RecipeStep =
   | { action: "pauseForHuman"; reason: string; note?: string }
   | { action: "submit"; selector: string; note?: string };
 
+/** A parked hosted-browser session a human can take over. */
+export interface TakeoverSession {
+  sessionId: string;
+  liveViewUrl: string | null;
+}
+
 export type PortalOutcome =
   | { kind: "submitted"; confirmationNumber: string | null }
   /** screenshot: base64 JPEG of the page at the moment of the pause/failure. */
-  | { kind: "needs_mfa"; reason: string; screenshot?: string }
-  | { kind: "needs_human"; reason: string; screenshot?: string }
+  | { kind: "needs_mfa"; reason: string; screenshot?: string; takeover?: TakeoverSession }
+  | { kind: "needs_human"; reason: string; screenshot?: string; takeover?: TakeoverSession }
   | { kind: "failed"; error: string; screenshot?: string };

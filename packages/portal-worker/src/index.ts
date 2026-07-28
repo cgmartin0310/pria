@@ -191,6 +191,8 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
           status: "needs_mfa",
           needsHumanReason: outcome.reason,
           pauseScreenshot: outcome.screenshot ?? null,
+          takeoverSessionId: outcome.takeover?.sessionId ?? null,
+          takeoverUrl: outcome.takeover?.liveViewUrl ?? null,
         });
         break;
       case "needs_human":
@@ -198,6 +200,8 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
           status: "needs_human",
           needsHumanReason: outcome.reason,
           pauseScreenshot: outcome.screenshot ?? null,
+          takeoverSessionId: outcome.takeover?.sessionId ?? null,
+          takeoverUrl: outcome.takeover?.liveViewUrl ?? null,
         });
         break;
       case "failed":

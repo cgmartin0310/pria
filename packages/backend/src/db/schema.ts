@@ -773,6 +773,9 @@ export const portalSubmissions = pgTable(
     needsHumanReason: text("needs_human_reason"),
     /** Base64 JPEG of the portal page at the moment of pause/failure. */
     pauseScreenshot: text("pause_screenshot"),
+    /** Parked hosted-browser session a human can take over (Steel). */
+    takeoverSessionId: varchar("takeover_session_id", { length: 100 }),
+    takeoverUrl: text("takeover_url"),
     /** Which worker/agent picked it up (for debugging the pool). */
     claimedBy: varchar("claimed_by", { length: 100 }),
     startedAt: timestamp("started_at"),

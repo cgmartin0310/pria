@@ -27,6 +27,8 @@ export const portalSubmissions = pgTable("portal_submissions", {
   lastError: text("last_error"),
   needsHumanReason: text("needs_human_reason"),
   pauseScreenshot: text("pause_screenshot"),
+  takeoverSessionId: varchar("takeover_session_id", { length: 100 }),
+  takeoverUrl: text("takeover_url"),
   claimedBy: varchar("claimed_by", { length: 100 }),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),

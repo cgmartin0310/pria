@@ -128,6 +128,24 @@ export async function portalRoutes(app: FastifyInstance) {
     }
   });
 
+  // A human finished a paused submission inside the parked browser session.
+  app.post("/portals/submissions/:id/complete", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { confirmationNumber?: string };
+    try {
+      const data = await portalService.completeSubmissionByHuman(
+        req.auth.practiceId,
+        id,
+        typeof body.confirmationNumber === "string"
+          ? body.confirmationNumber.slice(0, 100)
+          : undefined
+      );
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(err, reply);
+    }
+  });
+
   // ── Recipes (learned portal workflows) ────────────────────────────────────
   // Recipes are GLOBAL: every tenant's worker replays the active one, with live
   // PHI bound into its steps. Writing them is therefore PLATFORM-admin only

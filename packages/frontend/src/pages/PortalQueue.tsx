@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, RotateCcw, Bot, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, RotateCcw, Bot, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import {
@@ -33,6 +33,7 @@ function SubmissionRow({
   const [detail, setDetail] = useState<PortalSubmissionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const style = STATUS_STYLE[sub.status] ?? STATUS_STYLE.queued;
@@ -50,6 +51,25 @@ function SubmissionRow({
       } finally {
         setLoadingDetail(false);
       }
+    }
+  };
+
+  // The agent parked its browser mid-auth — the human finishes in that very
+  // session, then marks it done here so Pria records the filing.
+  const handleFinished = async () => {
+    const confirmationNumber =
+      window.prompt(
+        "Marking this as filed. Paste the payer's confirmation number if you have one (optional):"
+      ) ?? undefined;
+    setFinishing(true);
+    setError(null);
+    try {
+      await portalApi.completeSubmission(sub.id, confirmationNumber || undefined);
+      onChanged();
+    } catch (e) {
+      setError((e as { message?: string })?.message ?? "Couldn't mark it finished");
+    } finally {
+      setFinishing(false);
     }
   };
 
@@ -103,6 +123,24 @@ function SubmissionRow({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {sub.takeoverUrl && (
+              <>
+                <Button size="sm" asChild>
+                  <a href={sub.takeoverUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Finish in browser
+                  </a>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFinished}
+                  disabled={finishing}
+                >
+                  {finishing ? "Saving…" : "I've finished this"}
+                </Button>
+              </>
+            )}
             {RETRYABLE.includes(sub.status) && (
               <Button
                 variant="outline"

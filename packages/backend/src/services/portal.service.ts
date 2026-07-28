@@ -335,6 +335,47 @@ export async function checkTotp(practiceId: string, connectionId: string) {
   };
 }
 
+/**
+ * A human finished a paused submission in the parked browser session. Records
+ * it as filed and clears the takeover so nothing points at a dead session.
+ */
+export async function completeSubmissionByHuman(
+  practiceId: string,
+  submissionId: string,
+  confirmationNumber?: string
+) {
+  const [updated] = await db
+    .update(portalSubmissions)
+    .set({
+      status: "submitted",
+      confirmationNumber: confirmationNumber ?? null,
+      needsHumanReason: null,
+      takeoverSessionId: null,
+      takeoverUrl: null,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(portalSubmissions.id, submissionId),
+        eq(portalSubmissions.practiceId, practiceId),
+        inArray(portalSubmissions.status, ["needs_mfa", "needs_human"])
+      )
+    )
+    .returning();
+
+  if (!updated) {
+    throw new PortalError(404, "Submission not found, or it isn't paused");
+  }
+
+  await db
+    .update(authorizations)
+    .set({ status: "pending", submittedAt: new Date(), updatedAt: new Date() })
+    .where(eq(authorizations.id, updated.authorizationId));
+
+  return updated;
+}
+
 export async function listSubmissions(practiceId: string) {
   // Heavy fields (payload, pause screenshot) are excluded from the list —
   // fetch a single submission for those.
@@ -348,6 +389,8 @@ export async function listSubmissions(practiceId: string) {
       attempts: true,
       lastError: true,
       needsHumanReason: true,
+      takeoverSessionId: true,
+      takeoverUrl: true,
       claimedBy: true,
       startedAt: true,
       completedAt: true,

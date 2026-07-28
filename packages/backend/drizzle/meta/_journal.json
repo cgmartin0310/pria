@@ -106,6 +106,13 @@
       "when": 1785300000000,
       "tag": "0014_recipe_version_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1785400000000,
+      "tag": "0015_takeover_session",
+      "breakpoints": true
     }
   ]
 }
