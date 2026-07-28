@@ -1,6 +1,6 @@
 {
  "portalKey": "availity_essentials",
- "name": "Availity Essentials outpatient therapy auth v18 (Carolina Complete flow)",
+ "name": "Availity Essentials outpatient therapy auth v19 (Carolina Complete flow)",
  "activate": true,
  "steps": [
   {
@@ -574,12 +574,17 @@
    "note": "Let both uploads finish; the type rows render after"
   },
   {
+   "action": "wait",
+   "ms": 3000,
+   "note": "Let both upload rows finish rendering before touching their Type widgets"
+  },
+  {
    "action": "forEach",
    "list": "documentPaths",
    "steps": [
     {
      "action": "click",
-     "selector": ".select2-container.reportTypeCode >> nth={i}",
+     "selector": ".select2-container.reportTypeCode:visible >> nth={i}",
      "note": "Open the attachment Type widget for this file (hidden select carries class reportTypeCode)"
     },
     {
@@ -604,6 +609,43 @@
      "ms": 600
     }
    ]
+  },
+  {
+   "action": "wait",
+   "ms": 1200
+  },
+  {
+   "action": "forEach",
+   "list": "documentPaths",
+   "steps": [
+    {
+     "action": "click",
+     "selector": ".select2-container.reportTypeCode:visible >> nth={i}",
+     "note": "Open the attachment Type widget for this file (hidden select carries class reportTypeCode)"
+    },
+    {
+     "action": "wait",
+     "ms": 700
+    },
+    {
+     "action": "typeActive",
+     "binding": "documentTypeLabels.{i}",
+     "note": "Type into the widget's search box \u2014 same pattern as the diagnosis/CPT pickers"
+    },
+    {
+     "action": "wait",
+     "ms": 900
+    },
+    {
+     "action": "press",
+     "key": "Enter"
+    },
+    {
+     "action": "wait",
+     "ms": 600
+    }
+   ],
+   "note": "Second pass \u2014 idempotent; fixes any dropdown whose first attempt was swallowed mid-render"
   },
   {
    "action": "wait",
