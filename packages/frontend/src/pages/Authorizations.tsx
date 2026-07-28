@@ -230,6 +230,8 @@ export default function Authorizations() {
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [attaching, setAttaching] = useState<string | null>(null);
+  // Portals require an attachment TYPE per file (X12 PWK01 codes).
+  const [docType, setDocType] = useState("08");
 
   // Attach a document (e.g. the Plan of Care) — portals like Carolina
   // Complete require one; the worker uploads it during filing.
@@ -262,6 +264,7 @@ export default function Authorizations() {
             fileName: file.name,
             mimeType: file.type || "application/octet-stream",
             dataBase64,
+            docType,
           });
         }
         load();
@@ -442,6 +445,18 @@ export default function Authorizations() {
                           <FileCode className="h-3.5 w-3.5" />
                           Preview 278
                         </Button>
+                        <select
+                          className="rounded-md border border-slate-200 px-1.5 py-1 text-xs text-slate-600"
+                          value={docType}
+                          onChange={(e) => setDocType(e.target.value)}
+                          title="Attachment type sent to the payer"
+                        >
+                          <option value="08">Plan of Care</option>
+                          <option value="06">Evaluation</option>
+                          <option value="09">Progress note</option>
+                          <option value="B3">Physician order</option>
+                          <option value="M1">Other record</option>
+                        </select>
                         <Button
                           variant="ghost"
                           size="sm"

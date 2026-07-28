@@ -128,7 +128,15 @@ export const patientsApi = {
 };
 
 export const authDocsApi = {
-  upload: (authId: string, data: { fileName: string; mimeType: string; dataBase64: string }) =>
+  upload: (
+    authId: string,
+    data: {
+      fileName: string;
+      mimeType: string;
+      dataBase64: string;
+      docType?: string;
+    }
+  ) =>
     api.post<ApiResponse<{ id: string; fileName: string }>>(
       `/authorizations/${authId}/documents`,
       data

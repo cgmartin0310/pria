@@ -566,6 +566,23 @@
  },
  {
   "action": "wait",
+  "ms": 3000,
+  "note": "Let both uploads finish; the type rows render after"
+ },
+ {
+  "action": "forEach",
+  "list": "documentPaths",
+  "steps": [
+   {
+    "action": "select",
+    "selector": "select >> nth={i}",
+    "binding": "documentTypes.{i}",
+    "note": "Attachment type per file \u2014 the dropdowns are anonymous, so they're addressed in upload order (08 Plan of Treatment, 06 Initial Assessment)"
+   }
+  ]
+ },
+ {
+  "action": "wait",
   "ms": 1500
  },
  {

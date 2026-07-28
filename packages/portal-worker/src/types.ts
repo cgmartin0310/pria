@@ -49,6 +49,8 @@ export interface PortalSubmissionPayload {
   procedures?: { code: string; units: number; totalUnits: number }[];
   /** Local temp-file paths of downloaded attachments, set by the worker. */
   documentPaths?: string[];
+  /** Portal attachment-type codes, parallel to documentPaths (X12 PWK01). */
+  documentTypes?: string[];
   requestedVisits?: number;
   startDate?: string;
   endDate?: string;

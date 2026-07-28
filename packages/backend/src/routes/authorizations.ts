@@ -145,6 +145,11 @@ export async function authorizationRoutes(app: FastifyInstance) {
     mimeType: z.string().min(1).max(100),
     /** Base64 file bytes; ~10 MB decoded cap. */
     dataBase64: z.string().min(1).max(14_000_000),
+    /**
+     * Portal attachment-type code (X12 PWK01), e.g. "08" Plan of Treatment,
+     * "06" Initial Assessment. Portals require a type per file.
+     */
+    docType: z.string().max(5).optional(),
   });
 
   app.post(
@@ -182,7 +187,9 @@ export async function authorizationRoutes(app: FastifyInstance) {
         .values({
           authorizationId: id,
           type: "attachment",
-          content: parsed.data.fileName,
+          // `content` carries the portal attachment-type code; the filename
+          // has its own column.
+          content: parsed.data.docType ?? "M1",
           fileName: parsed.data.fileName,
           mimeType: parsed.data.mimeType,
           fileData: parsed.data.dataBase64,
@@ -210,7 +217,14 @@ export async function authorizationRoutes(app: FastifyInstance) {
       });
     }
     const docs = await db.query.authorizationDocuments.findMany({
-      columns: { id: true, fileName: true, mimeType: true, type: true, createdAt: true },
+      columns: {
+        id: true,
+        fileName: true,
+        mimeType: true,
+        type: true,
+        content: true,
+        createdAt: true,
+      },
       where: eq(schema.authorizationDocuments.authorizationId, id),
     });
     return reply.send({ data: docs.filter((d) => d.fileName) });

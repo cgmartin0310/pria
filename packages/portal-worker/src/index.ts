@@ -113,17 +113,22 @@ const worker = new Worker<{ portalSubmissionId: string; practiceId: string }>(
     });
     let docDir: string | null = null;
     const documentPaths: string[] = [];
+    const documentTypes: string[] = [];
     for (const doc of docs) {
       if (!doc.fileData || !doc.fileName) continue;
       docDir = docDir ?? (await mkdtemp(join(tmpdir(), "pria-docs-")));
       const filePath = join(docDir, doc.fileName.replace(/[^\w.\-]/g, "_"));
       await writeFile(filePath, Buffer.from(doc.fileData, "base64"));
       documentPaths.push(filePath);
+      // `content` holds the portal attachment-type code; M1 (Medical Record
+      // Attachment) is the safe generic when a document predates typing.
+      documentTypes.push(doc.content || "M1");
     }
 
     const payload = {
       ...(sub.payload as PortalSubmissionPayload),
       documentPaths,
+      documentTypes,
     };
 
     const outcome = await adapter({
