@@ -1,6 +1,6 @@
 {
  "portalKey": "availity_essentials",
- "name": "Availity Essentials outpatient therapy auth v12 (Carolina Complete flow)",
+ "name": "Availity Essentials outpatient therapy auth v13 (Carolina Complete flow)",
  "activate": true,
  "steps": [
   {
@@ -552,7 +552,37 @@
    "action": "uploadFile",
    "selector": "#filePicker-1",
    "binding": "documentPaths.0",
-   "note": "First attached document from Pria; skipped when none \u2014 the portal then blocks Next and the run pauses with a screenshot"
+   "note": "First attachment (CCH requires the signed Plan of Care AND the evaluation)"
+  },
+  {
+   "action": "wait",
+   "ms": 1500
+  },
+  {
+   "action": "forEach",
+   "list": "documentPaths",
+   "startIndex": 1,
+   "steps": [
+    {
+     "action": "clickByText",
+     "text": "Add File",
+     "note": "Adds another file row"
+    },
+    {
+     "action": "wait",
+     "ms": 1200
+    },
+    {
+     "action": "uploadFile",
+     "selector": "input[type=\"file\"] >> nth=-1",
+     "binding": "documentPaths.{i}",
+     "note": "Newest file input on the page"
+    },
+    {
+     "action": "wait",
+     "ms": 1500
+    }
+   ]
   },
   {
    "action": "wait",

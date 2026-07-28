@@ -237,28 +237,33 @@ export default function Authorizations() {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.tif,.tiff,.txt";
+    // Payers commonly want several documents (CCH: signed Plan of Care AND
+    // the evaluation) — let both be picked in one go.
+    input.multiple = true;
     input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      if (file.size > 10 * 1024 * 1024) {
-        setSubmitError("File too large — 10 MB max.");
+      const files = Array.from(input.files ?? []);
+      if (files.length === 0) return;
+      if (files.some((f) => f.size > 10 * 1024 * 1024)) {
+        setSubmitError("Each file must be 10 MB or smaller.");
         return;
       }
       setAttaching(authId);
       setSubmitError(null);
       try {
-        const dataBase64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () =>
-            resolve(String(reader.result).split(",")[1] ?? "");
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(file);
-        });
-        await authDocsApi.upload(authId, {
-          fileName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          dataBase64,
-        });
+        for (const file of files) {
+          const dataBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () =>
+              resolve(String(reader.result).split(",")[1] ?? "");
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+          });
+          await authDocsApi.upload(authId, {
+            fileName: file.name,
+            mimeType: file.type || "application/octet-stream",
+            dataBase64,
+          });
+        }
         load();
       } catch (e) {
         setSubmitError(
