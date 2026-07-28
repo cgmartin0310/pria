@@ -357,7 +357,7 @@ function RecipeUpload({
   if (!open) {
     return (
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        Upload recipe
+        Add recipe
       </Button>
     );
   }
@@ -371,7 +371,7 @@ function RecipeUpload({
       />
       <textarea
         className="min-h-[100px] w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs"
-        placeholder="Paste the recipe steps JSON"
+        placeholder="Paste the recipe steps JSON (the array from the .json file)"
         value={json}
         onChange={(e) => setJson(e.target.value)}
       />
