@@ -73,6 +73,78 @@ interface PracticeForm {
   zip: string;
 }
 
+/** Clinic sites — portals return one result row per site for a group NPI. */
+function LocationsEditor({ practice }: { practice: Practice | null }) {
+  const [rows, setRows] = useState<
+    { label: string; street: string; city: string; state: string; zip: string }[]
+  >([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (practice) setRows(practice.locations ?? []);
+  }, [practice]);
+
+  const update = (i: number, key: string, value: string) =>
+    setRows((prev) =>
+      prev.map((r, idx) => (idx === i ? { ...r, [key]: value } : r))
+    );
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await practiceApi.updateCurrent({ locations: rows.filter((r) => r.street.trim()) });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <h3 className="font-medium text-slate-900">Clinic Locations</h3>
+        <p className="text-sm text-slate-500">
+          Every site you treat at. New authorizations pick one, and the agent
+          selects that address in the payer portal.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {rows.map((r, i) => (
+          <div key={i} className="grid grid-cols-[1fr,2fr,1fr,60px,90px,40px] gap-2">
+            <Input placeholder="Label" value={r.label} onChange={(e) => update(i, "label", e.target.value)} />
+            <Input placeholder="Street" value={r.street} onChange={(e) => update(i, "street", e.target.value)} />
+            <Input placeholder="City" value={r.city} onChange={(e) => update(i, "city", e.target.value)} />
+            <Input placeholder="ST" maxLength={2} value={r.state} onChange={(e) => update(i, "state", e.target.value.toUpperCase())} />
+            <Input placeholder="ZIP" value={r.zip} onChange={(e) => update(i, "zip", e.target.value)} />
+            <Button variant="ghost" size="sm" onClick={() => setRows((p) => p.filter((_, idx) => idx !== i))}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRows((p) => [...p, { label: "", street: "", city: "", state: "", zip: "" }])}
+          >
+            <Plus className="h-4 w-4" /> Add location
+          </Button>
+          <Button size="sm" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save locations"}
+          </Button>
+          {saved && (
+            <span className="flex items-center gap-1 text-sm text-green-600">
+              <Check className="h-4 w-4" /> Saved
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function PracticeInfoTab({ practice }: { practice: Practice | null }) {
   const [form, setForm] = useState<PracticeForm>({
     name: "",
@@ -612,8 +684,9 @@ export default function Settings() {
               <TabsTrigger value="edi">EDI / Billing Config</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="practice" className="mt-4">
+            <TabsContent value="practice" className="mt-4 space-y-4">
               <PracticeInfoTab practice={practice} />
+              <LocationsEditor practice={practice} />
             </TabsContent>
 
             <TabsContent value="clearinghouses" className="mt-4">

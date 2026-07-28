@@ -66,6 +66,17 @@ export const practices = pgTable("practices", {
   email: varchar("email", { length: 255 }),
   plan: planTierEnum("plan").notNull().default("solo"),
   /**
+   * Clinic sites. Multi-site practices share one group NPI, so payer portals
+   * return a row per location and the right one has to be picked by address.
+   */
+  locations: jsonb("locations").$type<{
+    label: string;
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+  }[]>(),
+  /**
    * Clinic-level EDI / 278 configuration. Configured ONCE during clinic setup.
    * NOT collected per-patient or per-authorization.
    */
@@ -336,6 +347,14 @@ export const authorizations = pgTable(
     levelOfServiceCode: varchar("level_of_service_code", { length: 2 }),
     /** UM04-1: '11'=Office, '22'=Outpatient Hospital. Defaults to clinic config. */
     placeOfServiceCode: varchar("place_of_service_code", { length: 5 }),
+    /** Which clinic site the patient is treated at (portal location pick). */
+    serviceLocation: jsonb("service_location").$type<{
+      label?: string;
+      street: string;
+      city: string;
+      state?: string;
+      zip?: string;
+    }>(),
     /** UM01: 'HS'=Health Services Review (standard for outpatient PT/OT/ST) */
     requestCategoryCode: varchar("request_category_code", { length: 5 }),
 

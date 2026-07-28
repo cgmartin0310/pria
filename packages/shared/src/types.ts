@@ -36,6 +36,8 @@ export interface Practice extends TimestampedEntity {
   plan: PlanTier;
   /** Clinic-level 278 configuration — set once during onboarding */
   clinicConfig?: ClinicConfig;
+  /** Clinic sites; multi-site practices share one group NPI. */
+  locations?: PracticeLocation[];
 }
 
 /**
@@ -107,6 +109,14 @@ export interface ClinicConfig {
    * For outpatient PT/OT/ST: 'HS' (Health Services Review).
    */
   requestCategoryCode?: string;
+}
+
+export interface PracticeLocation {
+  label: string;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
 }
 
 export interface Address {

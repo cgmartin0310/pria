@@ -83,13 +83,20 @@ async function findFrame(page: Page, urlIncludes: string, timeoutMs: number): Pr
  * largest ancestor that is still unambiguously this candidate's own.
  */
 async function clickInRow(target: Target, selector: string, text: string): Promise<void> {
-  const needle = text.trim().toUpperCase();
-  if (!needle) throw new Error("clickInRow: match text resolved to empty");
+  const raw = text.trim().toUpperCase();
+  if (!raw) throw new Error("clickInRow: match text resolved to empty");
+  // A comma-separated value means EVERY part must appear in the row — e.g.
+  // "1244 N FLINT ST, LINCOLNTON" pins both street and city, which matters
+  // when a practice has several locations in the same town.
+  const parts = raw.split(",").map((p) => p.trim()).filter(Boolean);
   // Street suffixes get abbreviated differently everywhere ("STREET" vs
-  // "ST") — if the full line can't match, also try it without its last word.
-  const needles = [needle];
-  const words = needle.split(/\s+/);
-  if (words.length > 2) needles.push(words.slice(0, -1).join(" "));
+  // "ST") — try the full text first, then each part without its last word.
+  const attempts: string[][] = [parts];
+  const trimmed = parts.map((p) => {
+    const w = p.split(/\s+/);
+    return w.length > 2 ? w.slice(0, -1).join(" ") : p;
+  });
+  if (trimmed.join("|") !== parts.join("|")) attempts.push(trimmed);
   // Result rows usually arrive from an ajax search (Retrieve Provider Info) —
   // poll for candidates instead of failing on the not-yet-rendered list.
   const deadline = Date.now() + 20_000;
@@ -103,8 +110,8 @@ async function clickInRow(target: Target, selector: string, text: string): Promi
   // querySelectorAll, which rejects Playwright-only pseudo-classes like
   // :visible — strip them for that side only.
   const cssSelector = selector.replace(/:visible/g, "");
-  // Exact line first; the suffix-trimmed fallback only when nothing matched.
-  for (const candidate of needles) {
+  // Exact text first; the suffix-trimmed fallback only when nothing matched.
+  for (const candidate of attempts) {
     for (const handle of handles) {
       const matches = await handle.evaluate(
         (el, args) => {
@@ -113,9 +120,10 @@ async function clickInRow(target: Target, selector: string, text: string): Promi
             if (node.parentElement.querySelectorAll(args.selector).length > 1) break;
             node = node.parentElement;
           }
-          return (node.textContent ?? "").toUpperCase().includes(args.needle);
+          const rowText = (node.textContent ?? "").toUpperCase();
+          return args.needles.every((n: string) => rowText.includes(n));
         },
-        { selector: cssSelector, needle: candidate }
+        { selector: cssSelector, needles: candidate }
       );
       if (matches) {
         await handle.click();

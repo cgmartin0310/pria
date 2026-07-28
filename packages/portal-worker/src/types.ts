@@ -34,6 +34,12 @@ export interface PortalSubmissionPayload {
     address?: { street: string; city: string; state: string; zip: string };
   };
   serviceType?: { code?: string; label?: string };
+  /**
+   * Clinic site the patient is treated at. `match` is "street, city" — portal
+   * result rows for a multi-site NPI differ only by address, and city matters
+   * when two sites sit in the same town.
+   */
+  serviceLocation?: { street?: string; city?: string; match?: string };
   placeOfService?: { code?: string; label?: string };
   /** Portal urgency: "E" Elective or "U" Urgent (not the X12 UM06 code). */
   serviceLevelCode?: "E" | "U";

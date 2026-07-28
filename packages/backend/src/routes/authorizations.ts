@@ -31,6 +31,16 @@ const createAuthSchema = z.object({
     })
     .optional(),
   clinicalNotes: z.string().max(5000).optional(),
+  /** Clinic site the patient is treated at — drives the portal location pick. */
+  serviceLocation: z
+    .object({
+      label: z.string().max(100).optional(),
+      street: z.string().max(255),
+      city: z.string().max(100),
+      state: z.string().max(2).optional(),
+      zip: z.string().max(10).optional(),
+    })
+    .optional(),
 });
 
 export async function authorizationRoutes(app: FastifyInstance) {

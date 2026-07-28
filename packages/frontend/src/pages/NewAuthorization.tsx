@@ -12,7 +12,13 @@ import {
   LEVEL_OF_SERVICE_CODES,
   DISCIPLINE_TO_SERVICE_TYPE,
 } from "@pria/shared";
-import { patientsApi, providersApi, payersApi, authorizationsApi } from "@/lib/api.js";
+import {
+  patientsApi,
+  providersApi,
+  payersApi,
+  practiceApi,
+  authorizationsApi,
+} from "@/lib/api.js";
 import type { Patient, Payer, Provider } from "@pria/shared";
 
 // PatientWithPayer includes payer object from backend join
@@ -95,6 +101,18 @@ export default function NewAuthorization() {
   const [apiError, setApiError] = useState<string | null>(null);
 
   const [practicePayers, setPracticePayers] = useState<Payer[]>([]);
+  // Where the patient is treated — portals list a row per clinic site.
+  const [locations, setLocations] = useState<
+    { label: string; street: string; city: string; state: string; zip: string }[]
+  >([]);
+  const [locationIdx, setLocationIdx] = useState(0);
+
+  useEffect(() => {
+    practiceApi
+      .getCurrent()
+      .then((res) => setLocations(res.data?.locations ?? []))
+      .catch(() => setLocations([]));
+  }, []);
 
   useEffect(() => {
     Promise.all([patientsApi.list(), providersApi.list(), payersApi.list()])
@@ -448,6 +466,23 @@ export default function NewAuthorization() {
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-4">
+                <Field label="Clinic location (where the patient is seen)">
+                  <NativeSelect
+                    value={String(locationIdx)}
+                    onChange={(v) => setLocationIdx(parseInt(v, 10))}
+                  >
+                    {locations.length === 0 ? (
+                      <option value="0">Practice address (add sites in Settings)</option>
+                    ) : (
+                      locations.map((l, i) => (
+                        <option key={i} value={String(i)}>
+                          {l.label ? `${l.label} — ` : ""}
+                          {l.street}, {l.city}
+                        </option>
+                      ))
+                    )}
+                  </NativeSelect>
+                </Field>
                 <Field label="Place of Service">
                   <NativeSelect
                     value={placeOfServiceCode}

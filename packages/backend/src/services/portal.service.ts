@@ -171,6 +171,13 @@ function buildPayload(auth: {
   serviceTypeCode: string | null;
   placeOfServiceCode: string | null;
   levelOfServiceCode: string | null;
+  serviceLocation: {
+    label?: string;
+    street: string;
+    city: string;
+    state?: string;
+    zip?: string;
+  } | null;
 }, portalPayerName?: string): PortalSubmissionPayload {
   const diagnoses = Array.from(
     new Set([...(auth.icdCodes ?? []), ...(auth.patient.diagnosisCodes ?? [])])
@@ -210,6 +217,18 @@ function buildPayload(auth: {
       lastName: auth.patient.referringProviderLastName ?? undefined,
       npi: auth.patient.referringProviderNpi ?? undefined,
     },
+    // Where the patient is treated — falls back to the practice address for
+    // single-site practices and older auths.
+    serviceLocation: (() => {
+      const street = auth.serviceLocation?.street ?? auth.practice.address?.street;
+      const city = auth.serviceLocation?.city ?? auth.practice.address?.city;
+      if (!street) return undefined;
+      return {
+        street,
+        city,
+        match: city ? `${street}, ${city}` : street,
+      };
+    })(),
     serviceType: auth.serviceTypeCode
       ? (PORTAL_SERVICE_TYPES[auth.serviceTypeCode] ?? { code: auth.serviceTypeCode })
       : undefined,

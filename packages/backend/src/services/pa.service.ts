@@ -137,6 +137,13 @@ export async function createAuthorization(
       totalDurationDays?: number;
     };
     clinicalNotes?: string;
+    serviceLocation?: {
+      label?: string;
+      street: string;
+      city: string;
+      state?: string;
+      zip?: string;
+    };
   }
 ) {
   // Tenant check: the patient must belong to THIS practice. Without this, a
@@ -187,6 +194,7 @@ export async function createAuthorization(
       endDate: data.endDate ?? null,
       clinicalSummary: data.clinicalSummary ?? null,
       clinicalNotes: data.clinicalNotes ?? null,
+      serviceLocation: data.serviceLocation ?? null,
     })
     .returning();
 

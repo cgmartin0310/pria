@@ -18,6 +18,18 @@ const addressSchema = z.object({
 });
 
 const updatePracticeSchema = z.object({
+  locations: z
+    .array(
+      z.object({
+        label: z.string().max(100),
+        street: z.string().max(255),
+        city: z.string().max(100),
+        state: z.string().max(2),
+        zip: z.string().max(10),
+      })
+    )
+    .max(50)
+    .optional(),
   name: z.string().min(1).max(255).optional(),
   npi: z
     .string()

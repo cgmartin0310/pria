@@ -70,6 +70,12 @@ export interface PortalSubmissionPayload {
    * `label` is the display text ("Physical Therapy") for text-driven selects.
    */
   serviceType?: { code?: string; label?: string };
+  /**
+   * Clinic site the patient is treated at. `match` is "street, city" — portal
+   * result rows for a multi-site NPI differ only by address, and city matters
+   * when two sites sit in the same town.
+   */
+  serviceLocation?: { street?: string; city?: string; match?: string };
   /** CMS POS — 11 "Office" or 12 "Home" for therapy practices. */
   placeOfService?: { code?: string; label?: string };
   /**
