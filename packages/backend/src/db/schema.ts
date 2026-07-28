@@ -815,7 +815,9 @@ export const portalRecipes = pgTable(
   },
   (t) => [
     index("portal_recipes_portal_idx").on(t.portalKey),
-    uniqueIndex("portal_recipes_version_idx").on(t.portalKey, t.version),
+    // Versions are scoped per (portal, payer variant) — see migration 0014,
+    // which replaces the old (portal, version) unique with a coalesce-based
+    // expression index so generic (null payer) and variants don't collide.
   ]
 );
 
