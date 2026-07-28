@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, Sparkles, Send, Save } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
@@ -70,6 +70,9 @@ function NativeSelect({
 
 export default function NewAuthorization() {
   const navigate = useNavigate();
+  // With an :id param this same form edits an existing authorization.
+  const { id: editId } = useParams<{ id: string }>();
+  const isEdit = !!editId;
 
   // Data
   const [patients, setPatients] = useState<PatientRow[]>([]);
@@ -113,6 +116,33 @@ export default function NewAuthorization() {
       .then((res) => setLocations(res.data?.locations ?? []))
       .catch(() => setLocations([]));
   }, []);
+
+  // Edit mode: prefill from the existing authorization.
+  useEffect(() => {
+    if (!editId) return;
+    authorizationsApi
+      .get(editId)
+      .then((res) => {
+        const a = res.data;
+        if (!a) return;
+        setSelectedPatientId(a.patientId ?? "");
+        setSelectedProviderId(a.providerId ?? "");
+        setCertificationTypeCode(a.certificationTypeCode ?? "I");
+        setLevelOfServiceCode(a.levelOfServiceCode ?? "R");
+        setPlaceOfServiceCode(a.placeOfServiceCode ?? "11");
+        setSelectedCpts(a.cptCodes ?? []);
+        setRequestedVisits(String(a.requestedVisits ?? ""));
+        setStartDate(a.startDate ?? "");
+        setEndDate(a.endDate ?? "");
+        if (a.visitPattern) {
+          setVisitsPerPeriod(String(a.visitPattern.visitsPerPeriod));
+          setPeriodFrequency(a.visitPattern.periodFrequency);
+          setPeriodCount(String(a.visitPattern.periodCount));
+        }
+        setClinicalNotes(a.clinicalNotes ?? "");
+      })
+      .catch(() => setApiError("Couldn't load this authorization"));
+  }, [editId]);
 
   useEffect(() => {
     Promise.all([patientsApi.list(), providersApi.list(), payersApi.list()])
@@ -281,7 +311,11 @@ export default function NewAuthorization() {
     setSubmitting(true);
     setApiError(null);
     try {
-      await authorizationsApi.create(buildPayload("pending"));
+      if (isEdit && editId) {
+        await authorizationsApi.update(editId, buildPayload("pending"));
+      } else {
+        await authorizationsApi.create(buildPayload("pending"));
+      }
       navigate("/authorizations");
     } catch {
       setApiError("Submission failed. Please try again.");
@@ -295,7 +329,11 @@ export default function NewAuthorization() {
     setSavingDraft(true);
     setApiError(null);
     try {
-      await authorizationsApi.create(buildPayload("draft"));
+      if (isEdit && editId) {
+        await authorizationsApi.update(editId, buildPayload("draft"));
+      } else {
+        await authorizationsApi.create(buildPayload("draft"));
+      }
       navigate("/authorizations");
     } catch {
       setApiError("Failed to save draft. Please try again.");

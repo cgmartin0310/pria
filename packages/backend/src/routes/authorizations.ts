@@ -112,6 +112,35 @@ export async function authorizationRoutes(app: FastifyInstance) {
     return reply.status(201).send({ data: auth });
   });
 
+  // Edit an authorization that hasn't reached a payer yet
+  app.patch("/authorizations/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = createAuthSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: "VALIDATION_ERROR",
+        message: "Invalid request body",
+        statusCode: 400,
+        details: parsed.error.flatten(),
+      });
+    }
+    try {
+      const auth = await paService.updateAuthorization(
+        id,
+        req.auth.practiceId,
+        parsed.data as Record<string, unknown>
+      );
+      return reply.send({ data: auth });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Update failed";
+      return reply.status(400).send({
+        error: "UPDATE_ERROR",
+        message,
+        statusCode: 400,
+      });
+    }
+  });
+
   // Submit authorization (queues EDI job)
   app.post("/authorizations/:id/submit", async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -122,6 +151,22 @@ export async function authorizationRoutes(app: FastifyInstance) {
       const message = err instanceof Error ? err.message : "Submission failed";
       return reply.status(400).send({
         error: "SUBMISSION_ERROR",
+        message,
+        statusCode: 400,
+      });
+    }
+  });
+
+  // Renew — clone into a fresh draft for the next auth window
+  app.post("/authorizations/:id/renew", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const auth = await paService.renewAuthorization(id, req.auth.practiceId);
+      return reply.status(201).send({ data: auth });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Renewal failed";
+      return reply.status(400).send({
+        error: "RENEWAL_ERROR",
         message,
         statusCode: 400,
       });

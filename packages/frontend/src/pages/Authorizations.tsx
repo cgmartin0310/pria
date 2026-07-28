@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router";
-import { Plus, Search, FileText, FileCode, Copy, Check, AlertTriangle, X, Paperclip } from "lucide-react";
+import { Link, useNavigate } from "react-router";
+import { Plus, Search, FileText, FileCode, Copy, Check, AlertTriangle, X, Paperclip, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Badge } from "@/components/ui/badge.js";
@@ -200,6 +200,14 @@ interface Row {
   clearinghouseSubmissionId: string | null;
   decisionCode: string | null;
   documentCount: number;
+  endDate: string | null;
+}
+
+/** Days until an approved auth's window closes (null when not applicable). */
+function daysUntilExpiry(row: { status: PAStatus; endDate: string | null }): number | null {
+  if (row.status !== "approved" || !row.endDate) return null;
+  const end = new Date(`${row.endDate}T00:00:00`).getTime();
+  return Math.ceil((end - Date.now()) / 86_400_000);
 }
 
 function toRow(a: AuthorizationWithRelations): Row {
@@ -218,6 +226,7 @@ function toRow(a: AuthorizationWithRelations): Row {
     clearinghouseSubmissionId: a.clearinghouseSubmissionId ?? null,
     decisionCode: a.decisionCode ?? null,
     documentCount: (a as { documentCount?: number }).documentCount ?? 0,
+    endDate: a.endDate ?? null,
   };
 }
 
@@ -230,6 +239,7 @@ export default function Authorizations() {
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [attaching, setAttaching] = useState<string | null>(null);
+  const navigate = useNavigate();
   // Portals require an attachment TYPE per file (X12 PWK01 codes).
   const [docType, setDocType] = useState("08");
 
@@ -292,6 +302,23 @@ export default function Authorizations() {
 
   // Submission is queued and processed by a worker, so reload once immediately
   // and again shortly after to pick up the resulting decision.
+  // Therapy auths run in fixed windows; continuing care means re-filing the
+  // same request for the next one.
+  const handleRenew = async (authId: string) => {
+    setSubmitting(authId);
+    setSubmitError(null);
+    try {
+      const res = await authorizationsApi.renew(authId);
+      const newId = res.data?.id;
+      if (newId) navigate(`/authorizations/${newId}/edit`);
+      else load();
+    } catch (e) {
+      setSubmitError((e as { message?: string })?.message ?? "Renewal failed");
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
   const handleClearDocs = async (authId: string) => {
     if (!window.confirm("Remove all attachments from this authorization?")) return;
     setAttaching(authId);
@@ -452,6 +479,24 @@ export default function Authorizations() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {daysUntilExpiry(auth) !== null &&
+                          daysUntilExpiry(auth)! <= 45 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRenew(auth.id)}
+                              disabled={submitting === auth.id}
+                              title={`Expires in ${daysUntilExpiry(auth)} days`}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                              {submitting === auth.id ? "Renewing…" : "Renew"}
+                            </Button>
+                          )}
+                        {!auth.clearinghouseSubmissionId && !auth.decisionCode && (
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link to={`/authorizations/${auth.id}/edit`}>Edit</Link>
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"

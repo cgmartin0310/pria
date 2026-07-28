@@ -211,6 +211,143 @@ export async function createAuthorization(
   return auth;
 }
 
+/**
+ * Edit an authorization. Allowed while it's a draft, and while it's
+ * "submitted" but nothing has actually reached a payer yet (no clearinghouse
+ * id, no decision) — that state is really "queued", and fixing a wrong
+ * therapist there shouldn't require rebuilding the whole request.
+ */
+export async function updateAuthorization(
+  authorizationId: string,
+  practiceId: string,
+  data: Record<string, unknown>
+) {
+  const existing = await db.query.authorizations.findFirst({
+    where: and(
+      eq(authorizations.id, authorizationId),
+      eq(authorizations.practiceId, practiceId)
+    ),
+  });
+  if (!existing) throw new Error("Authorization not found");
+
+  const filed = !!existing.clearinghouseSubmissionId || !!existing.decisionCode;
+  if (filed || !["draft", "submitted", "pending"].includes(existing.status)) {
+    throw new Error(
+      `This authorization can't be edited — it has already been filed with the payer`
+    );
+  }
+
+  if (data["providerId"]) {
+    const provider = await db.query.providers.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(providers.id, String(data["providerId"])),
+        eq(providers.practiceId, practiceId)
+      ),
+    });
+    if (!provider) throw new Error("Provider not found");
+  }
+
+  const [updated] = await db
+    .update(authorizations)
+    .set({ ...data, updatedAt: new Date() })
+    .where(
+      and(
+        eq(authorizations.id, authorizationId),
+        eq(authorizations.practiceId, practiceId)
+      )
+    )
+    .returning();
+
+  await recordHistory({
+    authorizationId,
+    action: "edited",
+    fromStatus: existing.status,
+    toStatus: existing.status,
+    performedBy: "user",
+    notes: "Authorization details updated before filing",
+  });
+
+  return updated;
+}
+
+/**
+ * Renew an authorization: clone it into a fresh draft with the next date
+ * window. Therapy auths run in fixed periods (often 6 months), so continuing
+ * care means re-filing the same request — same patient, therapist, codes,
+ * location — for the next window.
+ */
+export async function renewAuthorization(
+  authorizationId: string,
+  practiceId: string
+) {
+  const prior = await db.query.authorizations.findFirst({
+    where: and(
+      eq(authorizations.id, authorizationId),
+      eq(authorizations.practiceId, practiceId)
+    ),
+  });
+  if (!prior) throw new Error("Authorization not found");
+
+  // The new window starts the day after the old one ends (or today, if the
+  // old window already lapsed).
+  const today = new Date();
+  const priorEnd = prior.endDate ? new Date(`${prior.endDate}T00:00:00`) : null;
+  const start =
+    priorEnd && priorEnd >= today
+      ? new Date(priorEnd.getTime() + 86_400_000)
+      : today;
+
+  // Reuse the payer's auth window when the practice has recorded one.
+  const link = await db.query.clearinghousePayers.findFirst({
+    where: and(
+      eq(schema.clearinghousePayers.practiceId, practiceId),
+      eq(schema.clearinghousePayers.payerId, prior.payerId)
+    ),
+  });
+  const months = link?.authPolicy?.authPeriodMonths ?? 6;
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + months);
+  end.setDate(end.getDate() - 1);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+  const [renewed] = await db
+    .insert(authorizations)
+    .values({
+      practiceId,
+      patientId: prior.patientId,
+      payerId: prior.payerId,
+      providerId: prior.providerId,
+      status: "draft",
+      cptCodes: prior.cptCodes,
+      icdCodes: prior.icdCodes,
+      requestedVisits: prior.requestedVisits,
+      certificationTypeCode: "S", // renewal/subsequent, not an initial request
+      serviceTypeCode: prior.serviceTypeCode,
+      levelOfServiceCode: prior.levelOfServiceCode,
+      placeOfServiceCode: prior.placeOfServiceCode,
+      serviceLocation: prior.serviceLocation,
+      visitPattern: prior.visitPattern,
+      startDate: iso(start),
+      endDate: iso(end),
+      clinicalNotes: prior.clinicalNotes,
+    })
+    .returning();
+
+  if (!renewed) throw new Error("Failed to create the renewal");
+
+  await recordHistory({
+    authorizationId: renewed.id,
+    action: "renewed_from",
+    fromStatus: null,
+    toStatus: "draft",
+    performedBy: "user",
+    notes: `Renewal of authorization ${prior.internalTrackingNumber ?? prior.id}`,
+  });
+
+  return renewed;
+}
+
 // ─── Submit Authorization ─────────────────────────────────────────────────────
 
 export async function submitAuthorization(

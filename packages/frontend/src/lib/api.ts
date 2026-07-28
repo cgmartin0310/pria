@@ -97,8 +97,12 @@ export const authorizationsApi = {
     api.get<ApiResponse<AuthorizationWithRelations>>(`/authorizations/${id}`),
   create: (data: unknown) =>
     api.post<ApiResponse<Authorization>>("/authorizations", data),
+  update: (id: string, data: unknown) =>
+    api.patch<ApiResponse<Authorization>>(`/authorizations/${id}`, data),
   submit: (id: string) =>
     api.post<ApiResponse<Authorization>>(`/authorizations/${id}/submit`),
+  renew: (id: string) =>
+    api.post<ApiResponse<Authorization>>(`/authorizations/${id}/renew`),
   generateSummary: (id: string) =>
     api.post<ApiResponse<{ summary: string; keyPoints: string[]; medicalNecessityScore: number }>>(
       `/authorizations/${id}/generate-summary`

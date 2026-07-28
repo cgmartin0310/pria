@@ -54,6 +54,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/authorizations" element={<Authorizations />} />
             <Route path="/authorizations/new" element={<NewAuthorization />} />
+            <Route path="/authorizations/:id/edit" element={<NewAuthorization />} />
             <Route path="/patients" element={<Patients />} />
             <Route path="/patients/new" element={<AddPatient />} />
             <Route path="/patients/:id/edit" element={<AddPatient />} />
