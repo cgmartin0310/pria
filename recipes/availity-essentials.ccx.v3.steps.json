@@ -539,6 +539,20 @@
   "note": "InterQual medical-necessity review \u2014 SKIPPED by policy (clinical questions stay human; payer reviews necessity manually). Change to complete-InterQual once billers define standard answers."
  },
  {
+  "action": "wait",
+  "ms": 1200
+ },
+ {
+  "action": "clickIfPresent",
+  "selector": "button:has-text(\"Skip Review\")",
+  "timeoutMs": 8000,
+  "note": "Confirmation modal: 'Skip Review' confirms no InterQual on this request"
+ },
+ {
+  "action": "wait",
+  "ms": 1500
+ },
+ {
   "action": "waitFor",
   "selector": "button:has-text(\"Add File\")",
   "timeoutMs": 40000,
