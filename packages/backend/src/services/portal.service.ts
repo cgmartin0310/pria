@@ -226,11 +226,16 @@ function buildPayload(auth: {
     diagnoses,
     cptCodes: auth.cptCodes ?? [],
     // Units per visit: PT/OT CPTs are timed in 15-minute units (60-minute
-    // session → 4); speech codes are untimed → always 1.
-    procedures: (auth.cptCodes ?? []).map((code) => ({
-      code,
-      units: auth.serviceTypeCode === "AF" ? 1 : 4,
-    })),
+    // session → 4); speech codes are untimed → always 1. Portals ask for the
+    // TOTAL units across the auth period, so carry both.
+    procedures: (auth.cptCodes ?? []).map((code) => {
+      const units = auth.serviceTypeCode === "AF" ? 1 : 4;
+      return {
+        code,
+        units,
+        totalUnits: units * (auth.requestedVisits || 0),
+      };
+    }),
     requestedVisits: auth.requestedVisits,
     startDate: auth.startDate ?? undefined,
     endDate: auth.endDate ?? undefined,

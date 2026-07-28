@@ -39,8 +39,14 @@ export interface PortalSubmissionPayload {
   serviceLevelCode?: "E" | "U";
   diagnoses: string[];
   cptCodes: string[];
-  /** Per-procedure: units per visit (PT/OT timed 15-min units; speech = 1). */
-  procedures?: { code: string; units: number }[];
+  /**
+   * Per-procedure entry for portal forms.
+   *  units      — units per visit (PT/OT timed 15-min units, 60-min → 4;
+   *               speech untimed → 1)
+   *  totalUnits — units for the WHOLE auth period (visits × units/visit).
+   *               Payers ask for this one: 1x/week for 6 months = 104.
+   */
+  procedures?: { code: string; units: number; totalUnits: number }[];
   /** Local temp-file paths of downloaded attachments, set by the worker. */
   documentPaths?: string[];
   requestedVisits?: number;

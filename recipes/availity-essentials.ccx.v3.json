@@ -1,6 +1,6 @@
 {
  "portalKey": "availity_essentials",
- "name": "Availity Essentials outpatient therapy auth v11 (Carolina Complete flow)",
+ "name": "Availity Essentials outpatient therapy auth v12 (Carolina Complete flow)",
  "activate": true,
  "steps": [
   {
@@ -335,13 +335,14 @@
   {
    "action": "type",
    "selector": "#procedures.0.serviceQuantity",
-   "binding": "procedures.0.units"
+   "binding": "procedures.0.totalUnits",
+   "note": "Total units for the whole auth period (visits x units/visit) \u2014 billers confirmed portals want the period total, not per-visit"
   },
   {
    "action": "select",
    "selector": "#procedures.0.serviceQuantityTypeCode",
    "value": "FL",
-   "note": "Units"
+   "note": "Units (billers confirmed Units, not Visits)"
   },
   {
    "action": "click",
@@ -416,12 +417,14 @@
     {
      "action": "type",
      "selector": "#procedures.{i}.serviceQuantity",
-     "binding": "procedures.{i}.units"
+     "binding": "procedures.{i}.totalUnits",
+     "note": "Total units for the whole auth period (visits x units/visit) \u2014 billers confirmed portals want the period total, not per-visit"
     },
     {
      "action": "select",
      "selector": "#procedures.{i}.serviceQuantityTypeCode",
-     "value": "FL"
+     "value": "FL",
+     "note": "Units (billers confirmed Units, not Visits)"
     },
     {
      "action": "click",
