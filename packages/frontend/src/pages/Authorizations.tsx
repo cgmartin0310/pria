@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router";
-import { Plus, Search, FileText, FileCode, Copy, Check, AlertTriangle, X } from "lucide-react";
+import { Plus, Search, FileText, FileCode, Copy, Check, AlertTriangle, X, Paperclip } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card.js";
 import { Button } from "@/components/ui/button.js";
 import { Badge } from "@/components/ui/badge.js";
@@ -199,6 +199,7 @@ interface Row {
   authNumber: string | null;
   clearinghouseSubmissionId: string | null;
   decisionCode: string | null;
+  documentCount: number;
 }
 
 function toRow(a: AuthorizationWithRelations): Row {
@@ -216,6 +217,7 @@ function toRow(a: AuthorizationWithRelations): Row {
     authNumber: a.authNumber,
     clearinghouseSubmissionId: a.clearinghouseSubmissionId ?? null,
     decisionCode: a.decisionCode ?? null,
+    documentCount: (a as { documentCount?: number }).documentCount ?? 0,
   };
 }
 
@@ -257,6 +259,7 @@ export default function Authorizations() {
           mimeType: file.type || "application/octet-stream",
           dataBase64,
         });
+        load();
       } catch (e) {
         setSubmitError(
           (e as { message?: string })?.message ?? "Document upload failed."
@@ -440,7 +443,12 @@ export default function Authorizations() {
                           onClick={() => handleAttach(auth.id)}
                           disabled={attaching === auth.id}
                         >
-                          {attaching === auth.id ? "Uploading…" : "Attach doc"}
+                          <Paperclip className="h-3.5 w-3.5" />
+                          {attaching === auth.id
+                            ? "Uploading…"
+                            : auth.documentCount > 0
+                              ? `${auth.documentCount} attached`
+                              : "Attach doc"}
                         </Button>
                         {auth.status === "draft" && (
                           <Button

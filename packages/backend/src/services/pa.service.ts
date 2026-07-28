@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, gte, lt, isNotNull } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lt, isNotNull, inArray } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import * as ediService from "./edi.service.js";
 import * as aiService from "./ai.service.js";
@@ -46,10 +46,31 @@ export async function listAuthorizations(
     getPayerDisplayNames(practiceId),
   ]);
 
+  // Attachment counts, so the list can show which auths have their documents.
+  const ids = items.map((a) => a.id);
+  const docCounts = new Map<string, number>();
+  if (ids.length > 0) {
+    const rows = await db
+      .select({
+        authorizationId: schema.authorizationDocuments.authorizationId,
+        count: sql<number>`count(*)`,
+      })
+      .from(schema.authorizationDocuments)
+      .where(
+        and(
+          inArray(schema.authorizationDocuments.authorizationId, ids),
+          isNotNull(schema.authorizationDocuments.fileName)
+        )
+      )
+      .groupBy(schema.authorizationDocuments.authorizationId);
+    for (const r of rows) docCounts.set(r.authorizationId, Number(r.count));
+  }
+
   return {
     data: items.map((a) => ({
       ...a,
       payer: applyPayerDisplayName(a.payer, payerNames),
+      documentCount: docCounts.get(a.id) ?? 0,
     })),
     total: Number(countResult[0]?.count ?? 0),
     page,
