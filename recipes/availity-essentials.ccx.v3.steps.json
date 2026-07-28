@@ -561,38 +561,12 @@
  {
   "action": "uploadFile",
   "selector": "#filePicker-1",
-  "binding": "documentPaths.0",
-  "note": "First attachment (CCH requires the signed Plan of Care AND the evaluation)"
+  "binding": "documentPaths",
+  "note": "All attached documents in one call (signed Plan of Care + evaluation); falls back to the first file if the input isn't multiple"
  },
  {
   "action": "wait",
   "ms": 1500
- },
- {
-  "action": "forEach",
-  "list": "documentPaths",
-  "startIndex": 1,
-  "steps": [
-   {
-    "action": "clickByText",
-    "text": "Add File",
-    "note": "Adds another file row"
-   },
-   {
-    "action": "wait",
-    "ms": 1200
-   },
-   {
-    "action": "uploadFile",
-    "selector": "input[type=\"file\"] >> nth=-1",
-    "binding": "documentPaths.{i}",
-    "note": "Newest file input on the page"
-   },
-   {
-    "action": "wait",
-    "ms": 1500
-   }
-  ]
  },
  {
   "action": "wait",

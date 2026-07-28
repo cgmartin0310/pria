@@ -305,16 +305,36 @@ async function execSteps(
           await page.waitForTimeout(step.ms);
           break;
         case "uploadFile": {
-          const filePath = valueFor(step);
+          // A binding may resolve to ONE path or the whole documentPaths
+          // array. Try every file in a single call (works when the input is
+          // multiple); fall back to the first so a single-file input still
+          // gets something rather than throwing.
+          const raw = step.binding
+            ? resolvePath(sub(step.binding), payload)
+            : step.value;
+          const files = Array.isArray(raw)
+            ? raw.map(String).filter(Boolean)
+            : raw
+              ? [String(raw)]
+              : [];
           // No attachment on the auth → skip; if the portal requires one, its
           // own validation blocks the next step and the run pauses with a
           // screenshot showing exactly that.
-          if (!filePath) break;
+          if (files.length === 0) break;
           const input = await state.target.waitForSelector(
             fixSelector(sub(step.selector)),
             { timeout: 15_000, state: "attached" }
           );
-          await input.setInputFiles(filePath);
+          try {
+            await input.setInputFiles(files);
+          } catch (uploadErr) {
+            console.warn(
+              `[uploadFile] multi-file upload failed (${
+                uploadErr instanceof Error ? uploadErr.message : uploadErr
+              }); falling back to the first file`
+            );
+            await input.setInputFiles(files[0]!);
+          }
           break;
         }
         case "select": {
