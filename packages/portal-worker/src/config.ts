@@ -33,8 +33,12 @@ export const config = {
    */
   steelApiKey: process.env["STEEL_API_KEY"] ?? "",
   steelBaseUrl: process.env["STEEL_BASE_URL"] ?? "https://api.steel.dev",
-  /** Minutes a paused session stays alive for takeover before Steel reaps it. */
-  steelSessionTtlMinutes: parseInt(process.env["STEEL_SESSION_TTL_MIN"] ?? "45", 10),
+  /**
+   * Minutes a paused session stays alive for takeover before Steel reaps it.
+   * Steel caps this per plan (15 min on ours) and rejects the create call with a
+   * 400 if we ask for more — raise the env var only alongside the plan.
+   */
+  steelSessionTtlMinutes: parseInt(process.env["STEEL_SESSION_TTL_MIN"] ?? "15", 10),
   /** Identifies this worker in portal_submissions.claimed_by. */
   workerId: process.env["WORKER_ID"] ?? `worker-${process.pid}`,
 } as const;

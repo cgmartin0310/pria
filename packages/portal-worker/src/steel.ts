@@ -36,15 +36,33 @@ async function steelFetch(path: string, init: RequestInit = {}): Promise<Respons
   });
 }
 
-/** Start a session. Throws so callers can fall back to a local browser. */
-export async function createSession(): Promise<SteelSession> {
-  const res = await steelFetch("/v1/sessions", {
+async function postSession(ttlMinutes: number): Promise<Response> {
+  return steelFetch("/v1/sessions", {
     method: "POST",
     body: JSON.stringify({
-      timeout: config.steelSessionTtlMinutes * 60 * 1000,
+      timeout: ttlMinutes * 60 * 1000,
       solveCaptcha: false,
     }),
   });
+}
+
+/** Start a session. Throws so callers can fall back to a local browser. */
+export async function createSession(): Promise<SteelSession> {
+  let res = await postSession(config.steelSessionTtlMinutes);
+
+  // Steel caps session length per plan. Rather than fail the takeover outright,
+  // take the cap it names in the 400 and retry once at that ceiling.
+  if (res.status === 400) {
+    const text = await res.text();
+    const cap = text.match(/maximum for your plan \((\d+)\s*min/i)?.[1];
+    if (cap) {
+      console.warn(`[steel] plan caps sessions at ${cap} min, retrying at that`);
+      res = await postSession(parseInt(cap, 10));
+    } else {
+      throw new Error(`Steel session create failed (400): ${text.slice(0, 300)}`);
+    }
+  }
+
   if (!res.ok) {
     throw new Error(
       `Steel session create failed (${res.status}): ${(await res.text()).slice(0, 300)}`
